@@ -118,6 +118,8 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, a, o, r):
             # If the belief object has mixtures fewer than ncBelief, fill with zeros
             b = np.zeros(input_dim)
             nBelief = len(b_object.w)
+            if nBelief == 0:
+                print("Empty belief, index: ", i)
             b[:nBelief] = b_object.w
             b[ncBelief:ncBelief + nBelief] = [g.m for g in b_object.g]
             b[ncBelief * (g_dim + 1):ncBelief * (g_dim + 1) + nBelief] = [g.S for g in b_object.g]
@@ -215,7 +217,7 @@ if __name__ == '__main__':
 
 
     for epoch in range(num_epoch):
-        pred_loss, r_loss = cal_loss(B_model, r_model, D_pre_model, loss_fn, bt_, bp_, b_next_, action_indices, action_obs_ind, r_, B_det_model)
+        pred_loss, r_loss = cal_loss(B_model, r_model, D_pre_model, loss_fn, bt_, bp_, b_next_, action_indices, action_obs_ind, r_, B_det_model=B_det_model)
         loss = pred_loss + r_loss
         loss.backward()
         optimizer.step()

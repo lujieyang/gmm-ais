@@ -55,6 +55,8 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
             a = A.rand()
             s, b, o, r, bn = self.SimulationStep(b, s, a)
 
+            # if k > 4170:
+            #     print("s")
             # b.plot()
 
             if (k > 1) and (minBeliefDist > 0):
