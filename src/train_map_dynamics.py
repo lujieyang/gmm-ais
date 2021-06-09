@@ -118,6 +118,11 @@ def process_belief(B, num_samples, step_ind, ncBelief, a, o, r):
 
     return np.array(bt[:-1]), np.array(b_next), input_dim, g_dim, action_indices[:-1], observation[:-1], reward[:-1]
 
+def save_model(B_model, r_model, D_pre_model, nz, nf):
+    np.save("model/B_{}_{}.pth".format(nz, nf), B_model.weight.data.numpy())
+    np.save("model/r_{}_{}.pth".format(nz, nf), r_model.weight.data.numpy())
+    torch.save(D_pre_model.state_dict(), "model/D_pre_{}_{}.pth".format(nz, nf))
+
 
 if __name__ == '__main__':
     # Sample belief states data
@@ -133,7 +138,7 @@ if __name__ == '__main__':
     bt, b_next, input_dim, g_dim, action_indices, observation, reward = process_belief(B, num_samples, step_ind, ncBelief, a, o, r)
 
     # "End-to-end" training to minimize AP12
-    nf = 98
+    nf = 96
     B_model = nD_Linear(nu, nz, nz, bias=False)
     project_col_sum(B_model)
     r_model = nn.Linear(nz, nu)
@@ -147,7 +152,7 @@ if __name__ == '__main__':
 
     params = list(B_model.parameters()) + list(r_model.parameters()) + list(D_pre_model.parameters())
     optimizer = torch.optim.Adam(params, lr=1e-3)
-    num_epoch = 20000
+    num_epoch = 50000
 
     writer = SummaryWriter()
     if torch.cuda.is_available():
@@ -160,6 +165,9 @@ if __name__ == '__main__':
     B_model.double()
     r_model.double()
     D_pre_model.double()
+    B_model.to(device)
+    r_model.to(device)
+    D_pre_model.to(device)
 
     for epoch in range(num_epoch):
         if epoch % 100 == 0:
@@ -169,7 +177,9 @@ if __name__ == '__main__':
         optimizer.step()
         # Projected Gradient Descent to ensure column sum of B = 1
         project_col_sum(B_model)
-        writer.add_scalar("Loss", loss, epoch)
+        writer.add_scalar("Loss/{}_sample_{}_nz".format(num_samples, nz), loss, epoch)
     writer.flush()
+
+    save_model(B_model, r_model, D_pre_model, nz, nf)
 
 
