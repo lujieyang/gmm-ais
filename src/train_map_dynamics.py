@@ -147,11 +147,14 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, a, o, r):
 
 
 def save_model(B_model, r_model, D_pre_model, nz, nf, B_det_model=None):
-    np.save("model/B_{}_{}.pth".format(nz, nf), B_model.weight.data.numpy())
-    np.save("model/r_{}_{}.pth".format(nz, nf), r_model.weight.data.numpy())
-    torch.save(D_pre_model.state_dict(), "model/D_pre_{}_{}.pth".format(nz, nf))
+    folder_name = "model/"
     if B_det_model is not None:
-        np.save("model/B_det_{}_{}.pth".format(nz, nf), B_det_model.weight.data.numpy())
+        folder_name += "det/"
+        B_det_model.cpu()
+        np.save(folder_name + "B_det_{}_{}.pth".format(nz, nf), B_det_model.weight.data.numpy())
+    np.save(folder_name + "B_{}_{}.pth".format(nz, nf), B_model.weight.data.numpy())
+    np.save(folder_name + "r_{}_{}.pth".format(nz, nf), r_model.weight.data.numpy())
+    torch.save(D_pre_model.state_dict(), folder_name + "D_pre_{}_{}.pth".format(nz, nf))
 
 
 if __name__ == '__main__':
@@ -223,6 +226,9 @@ if __name__ == '__main__':
         writer.add_scalar("Loss/{}_sample_{}_nz".format(num_samples, nz), loss, epoch)
     writer.flush()
 
+    B_model.cpu()
+    r_model.cpu()
+    D_pre_model.cpu()
     save_model(B_model, r_model, D_pre_model, nz, nf, B_det_model)
 
 
