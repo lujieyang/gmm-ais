@@ -81,15 +81,15 @@ def action_obs_1d_ind(nu, no, actions, obs):
 
 
 def cal_loss(B_model, r_model, D_pre_model, loss_fn, bt, bp, b_next, actions, action_obs_ind, r, l=1, B_det_model=None):
-    Db = F.gumbel_softmax(D_pre_model(bt))
+    Db = F.gumbel_softmax(D_pre_model(bt), hard=True)
     z = B_model(Db)
-    z_next = F.gumbel_softmax(D_pre_model(bp))
+    z_next = F.gumbel_softmax(D_pre_model(bp), hard=True)
     r_pred = r_model(Db)
     pred_loss = loss_fn(z[torch.arange(len(actions)), actions, :], z_next)
     r_loss = l*loss_fn(r_pred[torch.arange(len(actions)), actions], r)
     if B_det_model is not None:
         z_det = B_det_model(Db)
-        z_next_o = F.gumbel_softmax(D_pre_model(b_next))
+        z_next_o = F.gumbel_softmax(D_pre_model(b_next), hard=True)
         pred_loss += loss_fn(z_det[torch.arange(len(action_obs_ind)), action_obs_ind, :], z_next_o)
     return pred_loss, r_loss
 
@@ -146,7 +146,8 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, a, o, r):
     else:
         pass
 
-    return np.array(bt[:-1]), np.array(b_next), np.array(b_next_p), input_dim, g_dim, action_indices[:-1], observation_indices[:-1], reward[:-1]
+    return np.array(bt[:-1]), np.array(b_next), np.array(b_next_p), input_dim, g_dim, action_indices[:-1], \
+           observation_indices[:-1], reward[:-1]
 
 
 def save_model(B_model, r_model, D_pre_model, nz, nf, B_det_model=None):
@@ -154,9 +155,9 @@ def save_model(B_model, r_model, D_pre_model, nz, nf, B_det_model=None):
     if B_det_model is not None:
         folder_name += "det/"
         B_det_model.cpu()
-        np.save(folder_name + "B_det_{}_{}.pth".format(nz, nf), B_det_model.weight.data.numpy())
-    np.save(folder_name + "B_{}_{}.pth".format(nz, nf), B_model.weight.data.numpy())
-    np.save(folder_name + "r_{}_{}.pth".format(nz, nf), r_model.weight.data.numpy())
+        np.save(folder_name + "B_det_{}_{}".format(nz, nf), B_det_model.weight.data.numpy())
+    np.save(folder_name + "B_{}_{}".format(nz, nf), B_model.weight.data.numpy())
+    np.save(folder_name + "r_{}_{}".format(nz, nf), r_model.weight.data.numpy())
     torch.save(D_pre_model.state_dict(), folder_name + "D_pre_{}_{}.pth".format(nz, nf))
 
 
@@ -176,7 +177,8 @@ if __name__ == '__main__':
     nu = 3
     no = 4
 
-    bt, b_next, bp, input_dim, g_dim, action_indices, observation_indices, reward = process_belief(BO, B, num_samples, step_ind, ncBelief, a, o, r)
+    bt, b_next, bp, input_dim, g_dim, action_indices, observation_indices, reward = process_belief(BO, B, num_samples,
+                                                                                                   step_ind, ncBelief, a, o, r)
     action_obs_ind = action_obs_1d_ind(nu, no, action_indices, observation_indices)
 
     # "End-to-end" training to minimize AP12
@@ -215,14 +217,16 @@ if __name__ == '__main__':
     b_next_ = torch.from_numpy(b_next).to(torch.float32).to(device)
     r_ = torch.from_numpy(np.array(reward)).to(torch.float32).to(device)
 
-
     for epoch in range(num_epoch):
-        pred_loss, r_loss = cal_loss(B_model, r_model, D_pre_model, loss_fn, bt_, bp_, b_next_, action_indices, action_obs_ind, r_, B_det_model=B_det_model)
+        pred_loss, r_loss = cal_loss(B_model, r_model, D_pre_model, loss_fn, bt_, bp_, b_next_, action_indices,
+                                     action_obs_ind, r_, B_det_model=B_det_model)
         loss = pred_loss + r_loss
         loss.backward()
         optimizer.step()
         # Projected Gradient Descent to ensure column sum of B = 1
         project_col_sum(B_model)
+        if B_det_model is not None:
+            project_col_sum(B_det_model)
         if epoch % 100 == 0:
             print(epoch)
             print("Prediction loss: {}, reward loss: {}".format(pred_loss, r_loss))
