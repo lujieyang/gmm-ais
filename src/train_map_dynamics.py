@@ -125,9 +125,10 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, a, o, r):
             if i < num_samples-1:
                 bp_object = B[i]
                 bp = np.zeros(input_dim)
-                bp[:nBelief] = bp_object.w
-                bp[ncBelief:ncBelief + nBelief] = [g.m for g in bp_object.g]
-                bp[ncBelief * (g_dim + 1):ncBelief * (g_dim + 1) + nBelief] = [g.S for g in bp_object.g]
+                npBelief = len(bp_object.w)
+                bp[:npBelief] = bp_object.w
+                bp[ncBelief:ncBelief + npBelief] = [g.m for g in bp_object.g]
+                bp[ncBelief * (g_dim + 1):ncBelief * (g_dim + 1) + npBelief] = [g.S for g in bp_object.g]
             if i in step_ind_copy-1:
                 if i not in step_ind_copy:
                     b_next.append(b)
