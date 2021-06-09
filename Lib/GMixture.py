@@ -1,5 +1,6 @@
 import numpy as np
 import copy
+import matplotlib.pyplot as plt
 from Lib.utils import *
 from Lib.Gaussian import Gaussian
 
@@ -281,6 +282,26 @@ class GMixture:
                 d += self.w[i]*np.min(kl)
 
         return d
+
+    def plot(self):
+        if self.n > 0:
+            if self.g[0].dim == 1:
+                l = np.zeros(self.n)
+                u = np.zeros(self.n)
+                for i in range(self.n):
+                    c = self.g[i].S**.5
+                    m = self.g[i].m
+                    l[i] = m - 3*c
+                    u[i] = m + 3*c
+                mi = np.min(l)
+                ma = np.max(u)
+
+                n = 100
+                X = np.linspace(mi, ma, n)
+                Y = self.Value(X)
+                plt.plot(X, Y)
+                plt.show()
+
 
 
 

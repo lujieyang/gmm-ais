@@ -1,5 +1,6 @@
 import numpy as np
 import numpy.matlib as matlib
+import matplotlib.pyplot as plt
 import copy
 
 class Gaussian:
@@ -29,15 +30,15 @@ class Gaussian:
         l = np.size(x)
         Sn = -0.5 * self.iS
 
-        v = np.zeros((1, l))
-        if l == 1:
-            m = x - self.m
-            return self.ct * np.exp(m*Sn*m)
-        else:
-            for i in range(l):
-                m = x[i] - self.m
-                v[i] = self.ct * np.exp(m.T@Sn@m)
-            return v
+        # v = np.zeros((1, l))
+        # if l == 1:
+        m = x - self.m
+        return self.ct * np.exp(m*Sn*m)
+        # else:
+        #     for i in range(l):
+        #         m = x[i] - self.m
+        #         v[i] = self.ct * np.exp(m.T@Sn@m)
+        #     return v
 
     def rand(self, n=1):
         """
@@ -93,7 +94,7 @@ class Gaussian:
             iR = 1/R
             S = iR*iR
             d = self.ProductNormFactor(g2)
-            return Gaussian(self.iS*self.m+g2.iS*g2.m, S), d
+            return Gaussian(S*(self.iS*self.m+g2.iS*g2.m), S), d
         else:
             R = np.linalg.cholesky(iS).T.conj()
 
@@ -102,6 +103,14 @@ class Gaussian:
         Normalization constant of the product of two Gaussians.
         """
         return Gaussian(g2.m, self.S+g2.S).Value(self.m)
+
+    def plot(self):
+        if self.dim ==1:
+            r = 3*self.S**.5
+            X = np.linspace(self.m-r, self.m+r)
+            Y = self.Value(X)
+            plt.plot(X, Y)
+            plt.show()
 
 
 

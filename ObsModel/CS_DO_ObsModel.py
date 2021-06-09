@@ -12,7 +12,7 @@ class CS_DO_ObsModel:
         #       p(s) = sum_o p(o,s)
         # and, assuming it is constant, we scale p(o,s) so that
         # p(s) is actually uniform.
-        o = self.p[1]
+        o = self.p[0]
         for i in range(1, no):
             o = o+self.p[i]
 

@@ -31,21 +31,24 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
         self.O = O
 
     def SampleBeliefs(self, start, nBeliefs, minBeliefDist, stepsXtrial, minR, maxR):
-        np.random.seed(888)
+        np.random.seed(8888)
         A = self.A
         S = self.S
 
         md = minBeliefDist + 1
         SB = []
         s_s = []
+        a_s = []
         o_s = []
         r_s = []
+        step_ind = []
         k = 0
         r = maxR - 1
         while k < nBeliefs:
-            if (k % stepsXtrial == 0) or (r > maxR) or (r < minR):
+            if (k % stepsXtrial == 0):  #or (r > maxR) or (r < minR):
                 b = start
                 s = S.Crop(b.rand())
+                step_ind.append(k)
 
             a = A.rand()
             s, b, o, r = self.SimulationStep(b, s, a)
@@ -57,13 +60,15 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
                 k += 1
                 SB.append(b)
                 s_s.append(s)
+                a_s.append(a)
                 o_s.append(o)
                 r_s.append(r)
-                print(".", end = " ")
+                print(".", end=" ")
                 if k % 80 == 0:
                     print("\n")
+        print("\n")
 
-        return SB, s_s, o_s, r_s
+        return SB, s_s, a_s, o_s, r_s, step_ind
 
     def SimulationStep(self, b, s, a):
         S = self.S

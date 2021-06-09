@@ -75,7 +75,7 @@ def GetTest1Parameters(ncBelief=4, ncAlpha=9, actionScale=2):
     P["start"] = GBelief(GMixture(np.array([1, 1, 1, 1]), [g1, g1 + 10, g1 + 20, g1 + 30]), ncBelief)
     # Belief sampling
     P["nBeliefs"] = 500
-    P["dBelief"] = 0.1
+    P["dBelief"] = 0  # 0.1
     P["stepsXtrial"] = 30
     P["rMin"] = -0.5
     P["rMax"] = 0.5
@@ -89,12 +89,9 @@ def GetTest1Parameters(ncBelief=4, ncAlpha=9, actionScale=2):
     return POMDP, P
 
 
-
-
-
 if __name__ == "__main__":
     test = "Test1"
-    POMDP, P = GetTest1Parameters() #eval("Get"+test+"Parameters")
-    B, s, o, r = POMDP.SampleBeliefs(P["start"], P["nBeliefs"], P["dBelief"],
+    POMDP, P = GetTest1Parameters()  # eval("Get"+test+"Parameters")
+    B, s, a, o, r, step_ind = POMDP.SampleBeliefs(P["start"], P["nBeliefs"], P["dBelief"],
                                      P["stepsXtrial"], P["rMin"], P["rMax"])
 
