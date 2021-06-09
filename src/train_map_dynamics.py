@@ -122,7 +122,7 @@ def process_belief(B, num_samples, step_ind, ncBelief, a, o, r):
 if __name__ == '__main__':
     # Sample belief states data
     POMDP, P = GetTest1Parameters()
-    num_samples = 1000
+    num_samples = 10000
     ncBelief = 4
     B, s, a, o, r, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                         P["stepsXtrial"], P["rMin"], P["rMax"])
