@@ -1,4 +1,5 @@
 import numpy as np
+import copy
 from ActionModel.CS_DA_ActionModel import CS_DA_ActionModel
 from ObsModel.CS_DO_ObsModel import CS_DO_ObsModel
 from RewardModel.CS_DA_RewardModel import CS_DA_RewardModel
@@ -36,7 +37,8 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
         S = self.S
 
         md = minBeliefDist + 1
-        SB = []
+        B = []
+        BO = []
         s_s = []
         a_s = []
         o_s = []
@@ -51,16 +53,17 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
                 step_ind.append(k)
 
             a = A.rand()
-            s, b, o, r = self.SimulationStep(b, s, a)
+            s, b, o, r, bn = self.SimulationStep(b, s, a)
 
             # b.plot()
 
             if (k > 1) and (minBeliefDist > 0):
-                md = b.Distance(SB[k-1])
+                md = b.Distance(BO[k-1])
 
             if md > minBeliefDist:
                 k += 1
-                SB.append(b)
+                BO.append(b)
+                B.append(bn)
                 s_s.append(s)
                 a_s.append(a)
                 o_s.append(o)
@@ -70,12 +73,13 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
                     print("\n")
         print("\n")
 
-        return SB, s_s, a_s, o_s, r_s, step_ind
+        return BO, B, s_s, a_s, o_s, r_s, step_ind
 
     def SimulationStep(self, b, s, a):
         S = self.S
 
         s, b = self.Prediction(s, b, a, S)
+        bn = copy.copy(b)
         po = self.GetObsModelFixedS(s)
 
         o = RandVector(po)
@@ -83,7 +87,7 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
 
         r = self.Reward(a, s)
 
-        return s, b, o, r
+        return s, b, o, r, bn
 
 
 

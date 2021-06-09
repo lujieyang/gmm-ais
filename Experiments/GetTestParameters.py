@@ -92,6 +92,6 @@ def GetTest1Parameters(ncBelief=4, ncAlpha=9, actionScale=2):
 if __name__ == "__main__":
     test = "Test1"
     POMDP, P = GetTest1Parameters()  # eval("Get"+test+"Parameters")
-    B, s, a, o, r, step_ind = POMDP.SampleBeliefs(P["start"], P["nBeliefs"], P["dBelief"],
+    BO, B, s, a, o, r, step_ind = POMDP.SampleBeliefs(P["start"], P["nBeliefs"], P["dBelief"],
                                      P["stepsXtrial"], P["rMin"], P["rMax"])
 

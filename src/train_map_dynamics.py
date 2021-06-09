@@ -1,6 +1,6 @@
 import math
 import numpy as np
-import copy
+import argparse
 import torch
 from torch import Tensor
 from torch.nn.parameter import Parameter #, UninitializedParameter
@@ -72,11 +72,26 @@ class nD_Linear(Module):
         )
 
 
-def cal_loss(B_model, r_model, D_pre_model, loss_fn, bt, b_next, actions, r, lamda=1):
-    z = B_model(F.gumbel_softmax(D_pre_model(bt)))
-    z_next = F.gumbel_softmax(D_pre_model(b_next))
-    r_pred = r_model(F.gumbel_softmax(D_pre_model(bt)))
-    return loss_fn(z[torch.arange(len(actions)), actions, :], z_next) + lamda*loss_fn(r_pred[torch.arange(len(actions)), actions], r)
+def action_obs_1d_ind(nu, no, actions, obs):
+    K = np.arange(nu*no).reshape((nu, no))
+    ind = []
+    for i in range(len(actions)):
+        ind.append(K[actions[i], obs[i]])
+    return ind
+
+
+def cal_loss(B_model, r_model, D_pre_model, loss_fn, bt, bp, b_next, actions, action_obs_ind, r, l=1, B_det_model=None):
+    Db = F.gumbel_softmax(D_pre_model(bt))
+    z = B_model(Db)
+    z_next = F.gumbel_softmax(D_pre_model(bp))
+    r_pred = r_model(Db)
+    pred_loss = loss_fn(z[torch.arange(len(actions)), actions, :], z_next)
+    r_loss = l*loss_fn(r_pred[torch.arange(len(actions)), actions], r)
+    if B_det_model is not None:
+        z_det = B_det_model(Db)
+        z_next_o = F.gumbel_softmax(D_pre_model(b_next))
+        pred_loss += loss_fn(z_det[torch.arange(len(action_obs_ind)), action_obs_ind, :], z_next_o)
+    return pred_loss, r_loss
 
 
 def project_col_sum(model):
@@ -85,59 +100,86 @@ def project_col_sum(model):
     model.weight.data = model.weight.data/s
 
 
-def process_belief(B, num_samples, step_ind, ncBelief, a, o, r):
+def process_belief(BO, B, num_samples, step_ind, ncBelief, a, o, r):
     step_ind_copy = np.array(step_ind)
-    g_dim = B[0].g[0].dim
+    # Remove the first belief before observation (useless)
+    B.pop(0)
+    g_dim = BO[0].g[0].dim
     input_dim = ncBelief * (1 + g_dim + g_dim ** 2)  # w, mean, flatten(Sigma)
     bt = []
     b_next = []
+    b_next_p = []
     action_indices = []
-    observation = []
+    observation_indices = []
     reward = []
     if g_dim == 1:
         for i in range(num_samples):
-            b_object = B[i]
+            b_object = BO[i]
             # If the belief object has mixtures fewer than ncBelief, fill with zeros
             b = np.zeros(input_dim)
             nBelief = len(b_object.w)
             b[:nBelief] = b_object.w
             b[ncBelief:ncBelief + nBelief] = [g.m for g in b_object.g]
             b[ncBelief * (g_dim + 1):ncBelief * (g_dim + 1) + nBelief] = [g.S for g in b_object.g]
+            # Belief before observation
+            if i < num_samples-1:
+                bp_object = B[i]
+                bp = np.zeros(input_dim)
+                bp[:nBelief] = bp_object.w
+                bp[ncBelief:ncBelief + nBelief] = [g.m for g in bp_object.g]
+                bp[ncBelief * (g_dim + 1):ncBelief * (g_dim + 1) + nBelief] = [g.S for g in bp_object.g]
             if i in step_ind_copy-1:
                 if i not in step_ind_copy:
                     b_next.append(b)
             else:
                 bt.append(b)
+                if i < num_samples - 1:
+                    b_next_p.append(bp)
                 action_indices.append(int(a[i]-1))
-                observation.append(int(o[i]-1))
+                observation_indices.append(int(o[i]))
                 reward.append(r[i])
                 if i > 0 and i not in step_ind_copy:
                     b_next.append(bt[-1])
     else:
         pass
 
-    return np.array(bt[:-1]), np.array(b_next), input_dim, g_dim, action_indices[:-1], observation[:-1], reward[:-1]
+    return np.array(bt[:-1]), np.array(b_next), np.array(b_next_p), input_dim, g_dim, action_indices[:-1], observation_indices[:-1], reward[:-1]
 
-def save_model(B_model, r_model, D_pre_model, nz, nf):
+
+def save_model(B_model, r_model, D_pre_model, nz, nf, B_det_model=None):
     np.save("model/B_{}_{}.pth".format(nz, nf), B_model.weight.data.numpy())
     np.save("model/r_{}_{}.pth".format(nz, nf), r_model.weight.data.numpy())
     torch.save(D_pre_model.state_dict(), "model/D_pre_{}_{}.pth".format(nz, nf))
+    if B_det_model is not None:
+        np.save("model/B_det_{}_{}.pth".format(nz, nf), B_det_model.weight.data.numpy())
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--det_trans", help="Fit the deterministic transition of AIS (AP2a)", action="store_true")
+    parser.add_argument("--pred_obs", help="Predict the observation (AP2b)", action="store_true")
+    args = parser.parse_args()
+
     # Sample belief states data
     POMDP, P = GetTest1Parameters()
     num_samples = 10000
     ncBelief = 4
-    B, s, a, o, r, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
-                                        P["stepsXtrial"], P["rMin"], P["rMax"])
+    BO, B, s, a, o, r, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
+                                                      P["stepsXtrial"], P["rMin"], P["rMax"])
     nz = 30
     nu = 3
+    no = 4
 
-
-    bt, b_next, input_dim, g_dim, action_indices, observation, reward = process_belief(B, num_samples, step_ind, ncBelief, a, o, r)
+    bt, b_next, bp, input_dim, g_dim, action_indices, observation_indices, reward = process_belief(BO, B, num_samples, step_ind, ncBelief, a, o, r)
+    action_obs_ind = action_obs_1d_ind(nu, no, action_indices, observation_indices)
 
     # "End-to-end" training to minimize AP12
+    writer = SummaryWriter()
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
+
     nf = 96
     B_model = nD_Linear(nu, nz, nz, bias=False)
     project_col_sum(B_model)
@@ -149,37 +191,38 @@ if __name__ == '__main__':
             # nn.Linear(nf * 2, nf), nn.ReLU(),
             nn.Linear(nf, nz))
     loss_fn = nn.MSELoss()
+    B_model.to(device)
+    r_model.to(device)
+    D_pre_model.to(device)
+    B_det_model = None
+    if args.det_trans:
+        B_det_model = nD_Linear(nu*no, nz, nz, bias=False)
+        project_col_sum(B_det_model)
+        B_det_model.to(device)
 
     params = list(B_model.parameters()) + list(r_model.parameters()) + list(D_pre_model.parameters())
     optimizer = torch.optim.Adam(params, lr=1e-3)
     num_epoch = 50000
 
-    writer = SummaryWriter()
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    else:
-        device = torch.device("cpu")
-    bt_ = torch.from_numpy(bt).to(device)
-    b_next_ = torch.from_numpy(b_next).to(device)
-    r_ = torch.from_numpy(np.array(reward)).to(device)
-    B_model.double()
-    r_model.double()
-    D_pre_model.double()
-    B_model.to(device)
-    r_model.to(device)
-    D_pre_model.to(device)
+    bt_ = torch.from_numpy(bt).to(torch.float32).to(device)
+    bp_ = torch.from_numpy(bp).to(torch.float32).to(device)
+    b_next_ = torch.from_numpy(b_next).to(torch.float32).to(device)
+    r_ = torch.from_numpy(np.array(reward)).to(torch.float32).to(device)
+
 
     for epoch in range(num_epoch):
-        if epoch % 100 == 0:
-            print(epoch)
-        loss = cal_loss(B_model, r_model, D_pre_model, loss_fn, bt_, b_next_, action_indices, r_)
+        pred_loss, r_loss = cal_loss(B_model, r_model, D_pre_model, loss_fn, bt_, bp_, b_next_, action_indices, action_obs_ind, r_, B_det_model)
+        loss = pred_loss + r_loss
         loss.backward()
         optimizer.step()
         # Projected Gradient Descent to ensure column sum of B = 1
         project_col_sum(B_model)
+        if epoch % 100 == 0:
+            print(epoch)
+            print("Prediction loss: {}, reward loss: {}".format(pred_loss, r_loss))
         writer.add_scalar("Loss/{}_sample_{}_nz".format(num_samples, nz), loss, epoch)
     writer.flush()
 
-    save_model(B_model, r_model, D_pre_model, nz, nf)
+    save_model(B_model, r_model, D_pre_model, nz, nf, B_det_model)
 
 
