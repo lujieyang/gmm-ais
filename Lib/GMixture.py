@@ -101,7 +101,7 @@ class GMixture:
             # Remove non-important components (to speed up next step)
             #   - gmLC is the sub-set of gmN with relevant components
             #   - mapLC is the index of the elements of gmN used to form gmLC
-            gmLC, mapLC = self.RemoveSmallComponents(0.1 / gmN.n)
+            gmLC, mapLC = gmN.RemoveSmallComponents(0.1 / gmN.n)
 
             # Use the Goldberger and Roweis compression
             #   - gmC is the compressed mixture

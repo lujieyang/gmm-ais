@@ -81,7 +81,7 @@ class Gaussian:
         assert (self.dim == g2.dim), "Gaussians' dimensions don't match in GaussianKL"
         m12 = g2.m - self.m
         if self.dim == 1:
-            return (np.log(g2.d/self.d) + g2.iS*self.iS + m12*g2.iS*m12 - self.dim)/2
+            return (np.log(g2.d/self.d) + g2.iS*self.S + m12*g2.iS*m12 - self.dim)/2
         else:
             return (np.log(g2.d / self.d) + np.trace(g2.iS @ self.iS) + m12.T @ g2.iS @ m12 - self.dim) / 2
 

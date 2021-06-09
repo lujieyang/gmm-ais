@@ -53,6 +53,8 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
             a = A.rand()
             s, b, o, r = self.SimulationStep(b, s, a)
 
+            # b.plot()
+
             if (k > 1) and (minBeliefDist > 0):
                 md = b.Distance(SB[k-1])
 

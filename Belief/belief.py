@@ -11,7 +11,6 @@ class GBelief(Belief, GMixture):
 
         self.maxC = ncBelief
         gm1 = (gm.Compress(self.maxC)).Normalize()
-        self.gm = gm1
         GMixture.__init__(self, gm=gm1)
 
     def Prediction(self, t, Sp):
