@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from torch.nn import functional as F
+import torch.nn as nn
 from Experiments.GetTestParameters import GetTest1Parameters
 
 def value_iteration(B, r, nz, na, epsilon=0.0001, discount_factor=0.95):
@@ -81,7 +82,7 @@ def eval_performance(policy, V, POMDP, start, D, na, B_det=None, n_episodes=100,
         reward_episode = []
         b = start
         s = S.Crop(b.rand())
-        z_one_hot = F.gumbel_softmax(D(torch.from_numpy(b)))
+        z_one_hot = F.gumbel_softmax(D(torch.from_numpy(b.to_array()).to(torch.float32)), hard=True).data.numpy()
 
         for j in range(50):
             ind_z = np.where(z_one_hot == 1)[0][0]
@@ -90,13 +91,13 @@ def eval_performance(policy, V, POMDP, start, D, na, B_det=None, n_episodes=100,
 
             action = np.arange(na)[policy[ind_z].astype(bool)][0]
 
-            s, b, o, r = POMDP.SimulationStep(b, s, action)
+            s, b, o, r, bn = POMDP.SimulationStep(b, s, action)
             reward_episode.append(r)
 
             if B_det is not None:
                 z_one_hot = B_det@z_one_hot
             else:
-                z_one_hot = F.gumbel_softmax(D(torch.from_numpy(b)))
+                z_one_hot = F.gumbel_softmax(D(torch.from_numpy(b.to_array()).to(torch.float32)), hard=True).data.numpy()
 
         rets = []
         R = 0
@@ -112,5 +113,39 @@ def eval_performance(policy, V, POMDP, start, D, na, B_det=None, n_episodes=100,
     # print("Average V mse", V_mse/len(Vs))
     return average_return  # , V_mse/len(Vs)
 
+
+def interpret(POMDP, P, D, r):
+    num_samples = 100
+    BO, BS, s, a, o, reward, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
+                                                      P["stepsXtrial"], P["rMin"], P["rMax"])
+    for i in range(num_samples):
+        print("s: {}, a: {}, o: {}, r: {}".format(s[i], a[i], o[i], reward[i]))
+        BO[i].plot()
+        z_one_hot = F.gumbel_softmax(D(torch.from_numpy(BO[i].to_array()).to(torch.float32)), hard=True).data.numpy()
+        print("AIS cluster: ", np.where(z_one_hot==1)[0])
+        print("Reward prediction: ", r[int(a[i])-1]@z_one_hot)
+
+
+def load_model(nz, nf):
+    folder_name = "model/"
+    B = np.load(folder_name + "B_{}_{}.npy".format(nz, nf))
+    r = np.load(folder_name + "r_{}_{}.npy".format(nz, nf))
+    D = torch.load(folder_name + "D_pre_{}_{}_model.pth".format(nz, nf))
+    D.load_state_dict(torch.load(folder_name + "D_pre_{}_{}.pth".format(nz, nf)))
+    D.eval()
+    return B, r, D
+
+
 if __name__ == '__main__':
     POMDP, P = GetTest1Parameters()
+
+    nz = 30
+    nu = 3
+    nf = 96
+    B, r, D = load_model(nz, nf)
+
+    interpret(POMDP, P, D, r)
+    policy, V = value_iteration(B, r, nz, nu)
+    eval_performance(policy, V, POMDP, P["start"], D, nu)
+
+

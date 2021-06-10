@@ -114,23 +114,10 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, a, o, r):
     reward = []
     if g_dim == 1:
         for i in range(num_samples):
-            b_object = BO[i]
-            # If the belief object has mixtures fewer than ncBelief, fill with zeros
-            b = np.zeros(input_dim)
-            nBelief = len(b_object.w)
-            if nBelief == 0:
-                print("Empty belief, index: ", i)
-            b[:nBelief] = b_object.w
-            b[ncBelief:ncBelief + nBelief] = [g.m for g in b_object.g]
-            b[ncBelief * (g_dim + 1):ncBelief * (g_dim + 1) + nBelief] = [g.S for g in b_object.g]
+            b = BO[i].to_array()
             # Belief before observation
             if i < num_samples-1:
-                bp_object = B[i]
-                bp = np.zeros(input_dim)
-                npBelief = len(bp_object.w)
-                bp[:npBelief] = bp_object.w
-                bp[ncBelief:ncBelief + npBelief] = [g.m for g in bp_object.g]
-                bp[ncBelief * (g_dim + 1):ncBelief * (g_dim + 1) + npBelief] = [g.S for g in bp_object.g]
+                bp = B[i].to_array()
             if i in step_ind_copy-1:
                 if i not in step_ind_copy:
                     b_next.append(b)
@@ -157,8 +144,11 @@ def save_model(B_model, r_model, D_pre_model, nz, nf, B_det_model=None):
         B_det_model.cpu()
         np.save(folder_name + "B_det_{}_{}".format(nz, nf), B_det_model.weight.data.numpy())
     np.save(folder_name + "B_{}_{}".format(nz, nf), B_model.weight.data.numpy())
-    np.save(folder_name + "r_{}_{}".format(nz, nf), r_model.weight.data.numpy())
+    # np.save(folder_name + "r_{}_{}".format(nz, nf), r_model.weight.data.numpy())
+    torch.save(r_model.state_dict(), folder_name + "r_{}_{}.pth".format(nz, nf))
+    torch.save(r_model, folder_name + "r_{}_{}_model.pth".format(nz, nf))
     torch.save(D_pre_model.state_dict(), folder_name + "D_pre_{}_{}.pth".format(nz, nf))
+    torch.save(D_pre_model, folder_name + "D_pre_{}_{}_model.pth".format(nz, nf))
 
 
 if __name__ == '__main__':
@@ -171,13 +161,13 @@ if __name__ == '__main__':
     POMDP, P = GetTest1Parameters()
     num_samples = 10000
     ncBelief = 4
-    BO, B, s, a, o, r, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
+    BO, BS, s, a, o, r, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                                       P["stepsXtrial"], P["rMin"], P["rMax"])
-    nz = 30
+    nz = 20
     nu = 3
     no = 4
 
-    bt, b_next, bp, input_dim, g_dim, action_indices, observation_indices, reward = process_belief(BO, B, num_samples,
+    bt, b_next, bp, input_dim, g_dim, action_indices, observation_indices, reward = process_belief(BO, BS, num_samples,
                                                                                                    step_ind, ncBelief, a, o, r)
     action_obs_ind = action_obs_1d_ind(nu, no, action_indices, observation_indices)
 
@@ -191,7 +181,12 @@ if __name__ == '__main__':
     nf = 96
     B_model = nD_Linear(nu, nz, nz, bias=False)
     project_col_sum(B_model)
-    r_model = nn.Linear(nz, nu)
+    # r_model = nn.Linear(nz, nu)
+    r_model = nn.Sequential(
+            nn.Linear(nz, nf), nn.LeakyReLU(0.1),
+            # nn.Linear(nf, 2 * nf), nn.LeakyReLU(0.1),
+            # nn.Linear(2 * nf, nf), nn.LeakyReLU(0.1),
+            nn.Linear(nf, nu))
     D_pre_model = nn.Sequential(
             nn.Linear(input_dim, nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
             nn.Linear(nf, 2 * nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
@@ -209,7 +204,7 @@ if __name__ == '__main__':
         B_det_model.to(device)
 
     params = list(B_model.parameters()) + list(r_model.parameters()) + list(D_pre_model.parameters())
-    optimizer = torch.optim.Adam(params, lr=1e-3)
+    optimizer = torch.optim.Adam(params, lr=1e-4)
     num_epoch = 50000
 
     bt_ = torch.from_numpy(bt).to(torch.float32).to(device)

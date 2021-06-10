@@ -271,6 +271,9 @@ class GMixture:
         return GMixture(self.w, c)
 
     def Distance(self, gm2):
+        """
+        Approximated KL distance between Gaussian mixtures.
+        """
         if self.n == 0 and gm2.n == 0:
             d = np.inf
         else:
