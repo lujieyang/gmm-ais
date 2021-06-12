@@ -122,7 +122,7 @@ class GMixture:
 
     def CompressGR(self, m, epsilon, MaxIterations):
         """
-        Gaussian mixture compression using the Golberger and Roweis method.
+        Gaussian mixture compression using the Goldberger and Roweis method.
         :param m: The maximum number of components in  the output compressed
         normalized mixture.
         :param epsilon: Convergence criterion. If the relative error between two

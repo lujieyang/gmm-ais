@@ -80,27 +80,50 @@ def action_obs_1d_ind(nu, no, actions, obs):
     return ind
 
 
-def cal_loss(B_model, r_model, D_pre_model, loss_fn, bt, bp, b_next, actions, action_obs_ind, r, l=1, B_det_model=None):
-    Db = F.gumbel_softmax(D_pre_model(bt), hard=True)
-    z = B_model(Db)
-    z_next = F.gumbel_softmax(D_pre_model(bp), hard=True)
-    r_pred = r_model(Db)
-    pred_loss = loss_fn(z[torch.arange(len(actions)), actions, :], z_next)
-    r_loss = l*loss_fn(r_pred[torch.arange(len(actions)), actions], r)
-    if B_det_model is not None:
-        z_det = B_det_model(Db)
-        z_next_o = F.gumbel_softmax(D_pre_model(b_next), hard=True)
-        pred_loss += loss_fn(z_det[torch.arange(len(action_obs_ind)), action_obs_ind, :], z_next_o)
+def cal_loss(B_model, r_model, D_pre_model, loss_fn_z, loss_fn_r, bt, bp, b_next, actions, action_obs_ind, r,
+             l=1, tau=1, B_det_model=None):
+    pred_loss = 0
+    r_loss = 0
+    for i in range(nu):
+        # Calculate loss for each (discrete) action
+        ind = (actions == i)
+        Db = F.gumbel_softmax(D_pre_model(bt[ind]), tau=tau, hard=True)
+        z = B_model[i](Db)
+        z_next = F.gumbel_softmax(D_pre_model(bp[ind]), tau=tau, hard=True)
+        # Obtain class for cross entropy loss
+        # _, z_next_class = z_next.max(dim=1)
+        r_pred = r_model[i](Db)
+        pred_loss += loss_fn_z(z, z_next)
+        r_loss += l*loss_fn_r(r_pred, r[ind])
+        if B_det_model is not None:
+            z_det = B_det_model(Db)
+            z_next_o = F.gumbel_softmax(D_pre_model(b_next), tau=tau, hard=True)
+            pred_loss += loss_fn_z(z_det[torch.arange(len(action_obs_ind)), action_obs_ind, :], z_next_o)
     return pred_loss, r_loss
 
 
+def fit_state_loss(r_model_u, loss_fn, s, r, actions, nu):
+    loss = 0
+    for i in range(nu):
+        ind = (actions == i)
+        r_pred = r_model_u[i](s[ind])
+        loss += loss_fn(r_pred, r[ind])
+    return loss
+
+
 def project_col_sum(model):
-    model.weight.data.clamp_(min=0, max=1)
-    s = torch.sum(model.weight, 1).view([model.weight.shape[0], 1, model.weight.shape[2]])
-    model.weight.data = model.weight.data/s
+    # Shift weights to nonnegative and scale for col sum to be 1
+    for i in range(len(model)):
+        m = model[i]
+        d = m.weight.data
+        n = m.weight.shape[1]
+        m, _ = torch.min(d, axis=0)
+        d = d - m.view([1, n])
+        s = torch.sum(d, 0).view([1, n])
+        model[i].weight.data = d/s
 
 
-def process_belief(BO, B, num_samples, step_ind, ncBelief, a, o, r):
+def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r):
     step_ind_copy = np.array(step_ind)
     # Remove the first belief before observation (useless)
     B.pop(0)
@@ -109,6 +132,8 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, a, o, r):
     bt = []
     b_next = []
     b_next_p = []
+    st = []
+    s_next = []
     action_indices = []
     observation_indices = []
     reward = []
@@ -123,18 +148,20 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, a, o, r):
                     b_next.append(b)
             else:
                 bt.append(b)
-                if i < num_samples - 1:
-                    b_next_p.append(bp)
-                action_indices.append(int(a[i]-1))
+                st.append(s[i])
+                action_indices.append(int(a[i] - 1))
                 observation_indices.append(int(o[i]))
                 reward.append(r[i])
+                if i < num_samples - 1:
+                    b_next_p.append(bp)
+                    s_next.append(s[i+1])
                 if i > 0 and i not in step_ind_copy:
                     b_next.append(bt[-1])
     else:
         pass
 
-    return np.array(bt[:-1]), np.array(b_next), np.array(b_next_p), input_dim, g_dim, action_indices[:-1], \
-           observation_indices[:-1], reward[:-1]
+    return np.array(bt[:-1]), np.array(b_next), np.array(b_next_p), np.array(st[:-1]), np.array(s_next), input_dim, \
+           g_dim, action_indices[:-1], observation_indices[:-1], np.array(reward[:-1])
 
 
 def save_model(B_model, r_model, D_pre_model, nz, nf, B_det_model=None):
@@ -143,10 +170,18 @@ def save_model(B_model, r_model, D_pre_model, nz, nf, B_det_model=None):
         folder_name += "det/"
         B_det_model.cpu()
         np.save(folder_name + "B_det_{}_{}".format(nz, nf), B_det_model.weight.data.numpy())
-    np.save(folder_name + "B_{}_{}".format(nz, nf), B_model.weight.data.numpy())
+    B = []
+    r_dict = {}
+    for i in range(len(B_model)):
+        B_model[i].cpu()
+        B.append(B_model[i].weight.data.numpy())
+        r_model[i].cpu()
+        r_dict[str(i)] = r_model[i].state_dict()
+        r_dict["model_" + str(i)] = r_model[i]
+    np.save(folder_name + "B_{}_{}".format(nz, nf), B)
     # np.save(folder_name + "r_{}_{}".format(nz, nf), r_model.weight.data.numpy())
-    torch.save(r_model.state_dict(), folder_name + "r_{}_{}.pth".format(nz, nf))
-    torch.save(r_model, folder_name + "r_{}_{}_model.pth".format(nz, nf))
+    torch.save(r_dict, folder_name + "r_{}_{}.pth".format(nz, nf))
+    # torch.save(r_model, folder_name + "r_{}_{}_model.pth".format(nz, nf))
     torch.save(D_pre_model.state_dict(), folder_name + "D_pre_{}_{}.pth".format(nz, nf))
     torch.save(D_pre_model, folder_name + "D_pre_{}_{}_model.pth".format(nz, nf))
 
@@ -163,12 +198,12 @@ if __name__ == '__main__':
     ncBelief = 4
     BO, BS, s, a, o, r, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                                       P["stepsXtrial"], P["rMin"], P["rMax"])
-    nz = 20
+    nz = 30
     nu = 3
     no = 4
 
-    bt, b_next, bp, input_dim, g_dim, action_indices, observation_indices, reward = process_belief(BO, BS, num_samples,
-                                                                                                   step_ind, ncBelief, a, o, r)
+    bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward = \
+        process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, r)
     action_obs_ind = action_obs_1d_ind(nu, no, action_indices, observation_indices)
 
     # "End-to-end" training to minimize AP12
@@ -179,23 +214,23 @@ if __name__ == '__main__':
         device = torch.device("cpu")
 
     nf = 96
-    B_model = nD_Linear(nu, nz, nz, bias=False)
-    project_col_sum(B_model)
-    # r_model = nn.Linear(nz, nu)
-    r_model = nn.Sequential(
+    B_model = []
+    r_model = []
+    for i in range(nu):
+        B_model.append(nn.Linear(nz, nz, bias=False).to(device))
+        r_model.append(nn.Sequential(
             nn.Linear(nz, nf), nn.LeakyReLU(0.1),
-            # nn.Linear(nf, 2 * nf), nn.LeakyReLU(0.1),
-            # nn.Linear(2 * nf, nf), nn.LeakyReLU(0.1),
-            nn.Linear(nf, nu))
+            nn.Linear(nf, 1)).to(device))
+    project_col_sum(B_model)
+    input_dim = 1
     D_pre_model = nn.Sequential(
             nn.Linear(input_dim, nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
             nn.Linear(nf, 2 * nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
             nn.Linear(2 * nf, nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
             # nn.Linear(nf * 2, nf), nn.ReLU(),
             nn.Linear(nf, nz))
-    loss_fn = nn.MSELoss()
-    B_model.to(device)
-    r_model.to(device)
+    loss_fn_z = nn.L1Loss()  # CrossEntropyLoss()
+    loss_fn_r = nn.MSELoss()
     D_pre_model.to(device)
     B_det_model = None
     if args.det_trans:
@@ -203,18 +238,29 @@ if __name__ == '__main__':
         project_col_sum(B_det_model)
         B_det_model.to(device)
 
-    params = list(B_model.parameters()) + list(r_model.parameters()) + list(D_pre_model.parameters())
-    optimizer = torch.optim.Adam(params, lr=1e-4)
+    params = list(D_pre_model.parameters())
+    for x in B_model:
+        params += x.parameters()
+    for x in r_model:
+        params += x.parameters()
+    optimizer = torch.optim.Adam(params, lr=1e-3)
     num_epoch = 50000
 
-    bt_ = torch.from_numpy(bt).to(torch.float32).to(device)
-    bp_ = torch.from_numpy(bp).to(torch.float32).to(device)
-    b_next_ = torch.from_numpy(b_next).to(torch.float32).to(device)
-    r_ = torch.from_numpy(np.array(reward)).to(torch.float32).to(device)
+    # Shuffle data: change to DataLoader
+    ind = np.arange(st.shape[0])
+    np.random.shuffle(ind)
+    st_ = torch.from_numpy(st[ind]).view(st.shape[0], 1).to(torch.float32).to(device)
+    s_next_ = torch.from_numpy(s_next[ind]).view(bt.shape[0], 1).to(torch.float32).to(device)
+    # bt_ = torch.from_numpy(bt[ind]).to(torch.float32).to(device)
+    # bp_ = torch.from_numpy(bp[ind]).to(torch.float32).to(device)
+    b_next_ = torch.from_numpy(b_next[ind]).to(torch.float32).to(device)
+    r_ = torch.from_numpy(reward[ind]).view(st.shape[0], 1).to(torch.float32).to(device)
+    action_indices = np.array(action_indices)[ind]
 
     for epoch in range(num_epoch):
-        pred_loss, r_loss = cal_loss(B_model, r_model, D_pre_model, loss_fn, bt_, bp_, b_next_, action_indices,
-                                     action_obs_ind, r_, B_det_model=B_det_model)
+        optimizer.zero_grad()
+        pred_loss, r_loss = cal_loss(B_model, r_model, D_pre_model, loss_fn_z, loss_fn_r, st_, s_next_, b_next_,
+                                     action_indices, action_obs_ind, r_, l=10, tau=0.1, B_det_model=B_det_model)
         loss = pred_loss + r_loss
         loss.backward()
         optimizer.step()
@@ -228,8 +274,6 @@ if __name__ == '__main__':
         writer.add_scalar("Loss/{}_sample_{}_nz".format(num_samples, nz), loss, epoch)
     writer.flush()
 
-    B_model.cpu()
-    r_model.cpu()
     D_pre_model.cpu()
     save_model(B_model, r_model, D_pre_model, nz, nf, B_det_model)
 

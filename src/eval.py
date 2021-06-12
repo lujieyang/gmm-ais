@@ -3,6 +3,7 @@ import torch
 from torch.nn import functional as F
 import torch.nn as nn
 from Experiments.GetTestParameters import GetTest1Parameters
+from src.train_map_dynamics import *
 
 def value_iteration(B, r, nz, na, epsilon=0.0001, discount_factor=0.95):
     """
@@ -118,6 +119,8 @@ def interpret(POMDP, P, D, r):
     num_samples = 100
     BO, BS, s, a, o, reward, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                                       P["stepsXtrial"], P["rMin"], P["rMax"])
+    bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward = \
+        process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, r)
     for i in range(num_samples):
         print("s: {}, a: {}, o: {}, r: {}".format(s[i], a[i], o[i], reward[i]))
         BO[i].plot()
@@ -126,10 +129,16 @@ def interpret(POMDP, P, D, r):
         print("Reward prediction: ", r[int(a[i])-1]@z_one_hot)
 
 
-def load_model(nz, nf):
+def load_model(nz, nf, nu):
     folder_name = "model/"
     B = np.load(folder_name + "B_{}_{}.npy".format(nz, nf))
-    r = np.load(folder_name + "r_{}_{}.npy".format(nz, nf))
+    # r = np.load(folder_name + "r_{}_{}.npy".format(nz, nf))
+    r_dict = torch.load(folder_name + "r_{}_{}.pth".format(nz, nf))
+    r = []
+    for i in range(nu):
+        r.append(r_dict["model_" + str(i)])
+        r[i].load_state_dict(r_dict[str(i)])
+        r[i].eval()
     D = torch.load(folder_name + "D_pre_{}_{}_model.pth".format(nz, nf))
     D.load_state_dict(torch.load(folder_name + "D_pre_{}_{}.pth".format(nz, nf)))
     D.eval()
@@ -142,7 +151,8 @@ if __name__ == '__main__':
     nz = 30
     nu = 3
     nf = 96
-    B, r, D = load_model(nz, nf)
+    ncBelief = 4
+    B, r, D = load_model(nz, nf, nu)
 
     interpret(POMDP, P, D, r)
     policy, V = value_iteration(B, r, nz, nu)
