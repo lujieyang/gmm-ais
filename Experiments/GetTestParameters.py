@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 from Space.CSpace import CSpace
 from Space.DSpace import DSpace
@@ -48,14 +49,16 @@ def GetTest1Parameters(ncBelief=4, ncAlpha=9, actionScale=2):
     om.append(GMixture(np.ones((1, 5)), [Gaussian(21, so), Gaussian(19, so),
                                          Gaussian(17, so), Gaussian(15, so),
                                          Gaussian(13, so)]))
+    sd = .4
     # Door
-    om.append(GMixture(np.ones((1, 4)), [Gaussian(-11, so), Gaussian(-5, so),
-                                         Gaussian(3, so), Gaussian(9, so)]))
+    om.append(GMixture(np.ones((1, 4)), [Gaussian(-11, sd), Gaussian(-5, sd),
+                                         Gaussian(3, sd), Gaussian(9, sd)]))
+    sc = 1
     # Corridor
-    om.append(GMixture(np.ones((1, 8)), [Gaussian(-9, so), Gaussian(-7, so),
-                                         Gaussian(-3, so), Gaussian(-1, so),
-                                         Gaussian(1, so), Gaussian(5, so),
-                                         Gaussian(7, so), Gaussian(11, so)]))
+    om.append(GMixture(np.ones((1, 8)), [Gaussian(-9, sc), Gaussian(-7, sc),
+                                         Gaussian(-3, sc), Gaussian(-1, sc),
+                                         Gaussian(1, sc), Gaussian(5, sc),
+                                         Gaussian(7, sc), Gaussian(11, sc)]))
     OM = CS_DO_ObsModel(S, O, om)
 
     # Reward model with continuous states and discrete actions
@@ -88,10 +91,19 @@ def GetTest1Parameters(ncBelief=4, ncAlpha=9, actionScale=2):
 
     return POMDP, P
 
+def plot_model(gms, title):
+    for gm in gms:
+        gm.plot_()
+    axes = plt.gca()
+    axes.set_xlim([-21, 21])
+    plt.title(title)
+    plt.show()
 
 if __name__ == "__main__":
     test = "Test1"
-    POMDP, P = GetTest1Parameters()  # eval("Get"+test+"Parameters")
+    POMDP, P = GetTest1Parameters(ncBelief=5)  # eval("Get"+test+"Parameters")
+    plot_model(POMDP.p, "Observation Model")
+    plot_model(POMDP.r, "Reward Model")
     BO, B, s, a, o, r, step_ind = POMDP.SampleBeliefs(P["start"], P["nBeliefs"], P["dBelief"],
                                      P["stepsXtrial"], P["rMin"], P["rMax"])
 

@@ -26,7 +26,8 @@ def value_iteration(B, r, nz, na, epsilon=0.0001, discount_factor=0.95):
         z_one_hot[z] = 1
         z_next = B[a, :, :]@z_one_hot
         # ind = (z_next > epsilon)
-        v = r[a, :]@z_one_hot + discount_factor * z_next@V
+        reward = r[a](torch.from_numpy(z_one_hot).to(torch.float32)).detach().numpy()
+        v = reward + discount_factor * z_next@V
 
         return v
 
@@ -115,18 +116,34 @@ def eval_performance(policy, V, POMDP, start, D, na, B_det=None, n_episodes=100,
     return average_return  # , V_mse/len(Vs)
 
 
-def interpret(POMDP, P, D, r):
-    num_samples = 100
-    BO, BS, s, a, o, reward, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
-                                                      P["stepsXtrial"], P["rMin"], P["rMax"])
-    bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward = \
-        process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, r)
-    for i in range(num_samples):
+def interpret(BO, s, a, o, reward, D, r):
+    num_samples = len(BO)
+    ind = np.arange(num_samples)
+    # ind = ind[np.array(a)==3]
+    np.random.shuffle(ind)
+    for i in ind[:10]:
         print("s: {}, a: {}, o: {}, r: {}".format(s[i], a[i], o[i], reward[i]))
-        BO[i].plot()
-        z_one_hot = F.gumbel_softmax(D(torch.from_numpy(BO[i].to_array()).to(torch.float32)), hard=True).data.numpy()
-        print("AIS cluster: ", np.where(z_one_hot==1)[0])
-        print("Reward prediction: ", r[int(a[i])-1]@z_one_hot)
+        BO[i].plot(s[i])
+        z = F.gumbel_softmax(D(torch.from_numpy(BO[i].to_array()).to(torch.float32)), hard=True)
+        z_one_hot = z.data.numpy()
+        print("AIS cluster: ", np.where(z_one_hot == 1)[0][0])
+        print("Reward prediction: ", r[int(a[i]-1)](z).detach().numpy()[0])
+
+
+def validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt, bp, b_next, reward, action_indices):
+    # Validation Loss
+    pred_loss = 0
+    r_loss = 0
+    for i in range(nu):
+        # Calculate loss for each (discrete) action
+        ind = (np.array(action_indices) == i)
+        Db = F.gumbel_softmax(D(bt[ind]), hard=True)
+        z = B[i]@Db.detach().numpy().T
+        z_next = F.gumbel_softmax(D(bp[ind]), hard=True)
+        r_pred = r[i](Db)
+        pred_loss += loss_fn_z(torch.from_numpy(z.T).to(torch.float32), z_next)
+        r_loss += loss_fn_r(r_pred, reward[ind])
+    print("Prediction loss: {}, reward loss: {}".format(pred_loss, r_loss))
 
 
 def load_model(nz, nf, nu):
@@ -154,7 +171,21 @@ if __name__ == '__main__':
     ncBelief = 4
     B, r, D = load_model(nz, nf, nu)
 
-    interpret(POMDP, P, D, r)
+    num_samples = 1000
+    BO, BS, s, a, o, reward, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
+                                                      P["stepsXtrial"], P["rMin"], P["rMax"])
+    interpret(BO, s, a, o, reward, D, r)
+
+    bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward = \
+        process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, reward)
+    bt_ = torch.from_numpy(bt).to(torch.float32)
+    bp_ = torch.from_numpy(bp).to(torch.float32)
+    b_next_ = torch.from_numpy(b_next).to(torch.float32)
+    r_ = torch.from_numpy(reward).view(st.shape[0], 1).to(torch.float32)
+    loss_fn_z = nn.L1Loss()
+    loss_fn_r = nn.MSELoss()
+    validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt_, bp_, b_next_, r_, action_indices)
+
     policy, V = value_iteration(B, r, nz, nu)
     eval_performance(policy, V, POMDP, P["start"], D, nu)
 

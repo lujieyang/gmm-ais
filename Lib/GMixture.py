@@ -157,7 +157,7 @@ class GMixture:
                         gmC.w[j] = sw
                         g = []
                         for k in ndx:
-                            g.append(self.g[k])
+                            g.append(copy.copy(self.g[k]))
                         gmC.g[j] = GMixture(self.w[ndx]/sw, g).FuseComponents()
                     else:
                         # None of the components of gm is close to this component of gmC
@@ -204,7 +204,7 @@ class GMixture:
             nw = self.w[idx]
             g = []
             for i in idx:
-                g.append(self.g[i])
+                g.append(copy.copy(self.g[i]))
             return GMixture(nw/np.sum(nw), g)
 
     def RemoveSmallComponents(self, t):
@@ -221,7 +221,7 @@ class GMixture:
         map = np.where(np.abs(self.w) > t)[0]
         g = []
         for i in map:
-            g.append(self.g[i])
+            g.append(copy.copy(self.g[i]))
         gmOut = GMixture(self.w[map], g)
         return gmOut, map
 
@@ -287,7 +287,10 @@ class GMixture:
 
         return d
 
-    def plot(self):
+    def plot_(self, s=None):
+        """
+        :param s: the underlying state
+        """
         if self.n > 0:
             if self.g[0].dim == 1:
                 l = np.zeros(self.n)
@@ -304,7 +307,12 @@ class GMixture:
                 X = np.linspace(mi, ma, n)
                 Y = self.Value(X)
                 plt.plot(X, Y)
-                plt.show()
+                if s is not None:
+                    plt.title("s=" + str(s))
+
+    def plot(self, s=None):
+        self.plot_(s)
+        plt.show()
 
 
 

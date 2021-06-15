@@ -80,7 +80,7 @@ def action_obs_1d_ind(nu, no, actions, obs):
     return ind
 
 
-def cal_loss(B_model, r_model, D_pre_model, loss_fn_z, loss_fn_r, bt, bp, b_next, actions, action_obs_ind, r,
+def cal_loss(B_model, r_model, D_pre_model, loss_fn_z, loss_fn_r, nu, bt, bp, b_next, actions, action_obs_ind, r,
              l=1, tau=1, B_det_model=None):
     pred_loss = 0
     r_loss = 0
@@ -193,9 +193,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Sample belief states data
-    POMDP, P = GetTest1Parameters()
+    ncBelief = 5
+    POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
     num_samples = 10000
-    ncBelief = 4
     BO, BS, s, a, o, r, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                                       P["stepsXtrial"], P["rMin"], P["rMax"])
     nz = 30
@@ -222,7 +222,6 @@ if __name__ == '__main__':
             nn.Linear(nz, nf), nn.LeakyReLU(0.1),
             nn.Linear(nf, 1)).to(device))
     project_col_sum(B_model)
-    input_dim = 1
     D_pre_model = nn.Sequential(
             nn.Linear(input_dim, nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
             nn.Linear(nf, 2 * nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
@@ -251,16 +250,16 @@ if __name__ == '__main__':
     np.random.shuffle(ind)
     st_ = torch.from_numpy(st[ind]).view(st.shape[0], 1).to(torch.float32).to(device)
     s_next_ = torch.from_numpy(s_next[ind]).view(bt.shape[0], 1).to(torch.float32).to(device)
-    # bt_ = torch.from_numpy(bt[ind]).to(torch.float32).to(device)
-    # bp_ = torch.from_numpy(bp[ind]).to(torch.float32).to(device)
+    bt_ = torch.from_numpy(bt[ind]).to(torch.float32).to(device)
+    bp_ = torch.from_numpy(bp[ind]).to(torch.float32).to(device)
     b_next_ = torch.from_numpy(b_next[ind]).to(torch.float32).to(device)
     r_ = torch.from_numpy(reward[ind]).view(st.shape[0], 1).to(torch.float32).to(device)
     action_indices = np.array(action_indices)[ind]
 
     for epoch in range(num_epoch):
         optimizer.zero_grad()
-        pred_loss, r_loss = cal_loss(B_model, r_model, D_pre_model, loss_fn_z, loss_fn_r, st_, s_next_, b_next_,
-                                     action_indices, action_obs_ind, r_, l=10, tau=0.1, B_det_model=B_det_model)
+        pred_loss, r_loss = cal_loss(B_model, r_model, D_pre_model, loss_fn_z, loss_fn_r, nu, bt_, bp_, b_next_,
+                                     action_indices, action_obs_ind, r_, l=10, tau=1, B_det_model=B_det_model)
         loss = pred_loss + r_loss
         loss.backward()
         optimizer.step()
