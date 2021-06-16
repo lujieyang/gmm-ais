@@ -164,7 +164,7 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r):
            g_dim, action_indices[:-1], observation_indices[:-1], np.array(reward[:-1])
 
 
-def save_model(B_model, r_model, D_pre_model, nz, nf, B_det_model=None):
+def save_model(B_model, r_model, D_pre_model, nz, nf, tau, B_det_model=None):
     folder_name = "model/"
     if B_det_model is not None:
         folder_name += "det/"
@@ -178,18 +178,19 @@ def save_model(B_model, r_model, D_pre_model, nz, nf, B_det_model=None):
         r_model[i].cpu()
         r_dict[str(i)] = r_model[i].state_dict()
         r_dict["model_" + str(i)] = r_model[i]
-    np.save(folder_name + "B_{}_{}".format(nz, nf), B)
+    np.save(folder_name + "B_{}_{}_{}".format(nz, nf, tau), B)
     # np.save(folder_name + "r_{}_{}".format(nz, nf), r_model.weight.data.numpy())
-    torch.save(r_dict, folder_name + "r_{}_{}.pth".format(nz, nf))
+    torch.save(r_dict, folder_name + "r_{}_{}_{}.pth".format(nz, nf, tau))
     # torch.save(r_model, folder_name + "r_{}_{}_model.pth".format(nz, nf))
-    torch.save(D_pre_model.state_dict(), folder_name + "D_pre_{}_{}.pth".format(nz, nf))
-    torch.save(D_pre_model, folder_name + "D_pre_{}_{}_model.pth".format(nz, nf))
+    torch.save(D_pre_model.state_dict(), folder_name + "D_pre_{}_{}_{}.pth".format(nz, nf, tau))
+    torch.save(D_pre_model, folder_name + "D_pre_{}_{}_{}_model.pth".format(nz, nf, tau))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--det_trans", help="Fit the deterministic transition of AIS (AP2a)", action="store_true")
     parser.add_argument("--pred_obs", help="Predict the observation (AP2b)", action="store_true")
+    parser.add_argument("--tau", help="Temperature for Gumbel Softmax", type=float, default=1)
     args = parser.parse_args()
 
     # Sample belief states data
@@ -201,6 +202,7 @@ if __name__ == '__main__':
     nz = 30
     nu = 3
     no = 4
+    tau = args.tau
 
     bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward = \
         process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, r)
@@ -259,7 +261,7 @@ if __name__ == '__main__':
     for epoch in range(num_epoch):
         optimizer.zero_grad()
         pred_loss, r_loss = cal_loss(B_model, r_model, D_pre_model, loss_fn_z, loss_fn_r, nu, bt_, bp_, b_next_,
-                                     action_indices, action_obs_ind, r_, l=10, tau=1, B_det_model=B_det_model)
+                                     action_indices, action_obs_ind, r_, l=10, tau=tau, B_det_model=B_det_model)
         loss = pred_loss + r_loss
         loss.backward()
         optimizer.step()
@@ -274,6 +276,6 @@ if __name__ == '__main__':
     writer.flush()
 
     D_pre_model.cpu()
-    save_model(B_model, r_model, D_pre_model, nz, nf, B_det_model)
+    save_model(B_model, r_model, D_pre_model, nz, nf, tau, B_det_model)
 
 

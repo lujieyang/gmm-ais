@@ -303,7 +303,7 @@ class GMixture:
                 mi = np.min(l)
                 ma = np.max(u)
 
-                n = 100
+                n = 1000
                 X = np.linspace(mi, ma, n)
                 Y = self.Value(X)
                 plt.plot(X, Y)
