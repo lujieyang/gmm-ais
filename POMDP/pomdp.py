@@ -48,7 +48,7 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
         r = maxR - 1
         while k < nBeliefs:
             if (k % stepsXtrial == 0):  #or (r > maxR) or (r < minR):
-                b = start
+                b = copy.deepcopy(start)
                 s = S.Crop(b.rand())
                 step_ind.append(k)
 

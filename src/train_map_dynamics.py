@@ -3,7 +3,7 @@ import numpy as np
 import argparse
 import torch
 from torch import Tensor
-from torch.nn.parameter import Parameter #, UninitializedParameter
+from torch.nn.parameter import Parameter
 from torch.nn import functional as F
 import torch.nn as nn
 from torch.nn import init
@@ -165,7 +165,7 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r):
 
 
 def save_model(B_model, r_model, D_pre_model, nz, nf, tau, B_det_model=None):
-    folder_name = "model/"
+    folder_name = "model/" + "500k/"
     if B_det_model is not None:
         folder_name += "det/"
         B_det_model.cpu()
@@ -179,9 +179,7 @@ def save_model(B_model, r_model, D_pre_model, nz, nf, tau, B_det_model=None):
         r_dict[str(i)] = r_model[i].state_dict()
         r_dict["model_" + str(i)] = r_model[i]
     np.save(folder_name + "B_{}_{}_{}".format(nz, nf, tau), B)
-    # np.save(folder_name + "r_{}_{}".format(nz, nf), r_model.weight.data.numpy())
     torch.save(r_dict, folder_name + "r_{}_{}_{}.pth".format(nz, nf, tau))
-    # torch.save(r_model, folder_name + "r_{}_{}_model.pth".format(nz, nf))
     torch.save(D_pre_model.state_dict(), folder_name + "D_pre_{}_{}_{}.pth".format(nz, nf, tau))
     torch.save(D_pre_model, folder_name + "D_pre_{}_{}_{}_model.pth".format(nz, nf, tau))
 
@@ -196,7 +194,7 @@ if __name__ == '__main__':
     # Sample belief states data
     ncBelief = 5
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
-    num_samples = 10000
+    num_samples = 500000
     BO, BS, s, a, o, r, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                                       P["stepsXtrial"], P["rMin"], P["rMax"])
     nz = 30
@@ -227,8 +225,8 @@ if __name__ == '__main__':
     D_pre_model = nn.Sequential(
             nn.Linear(input_dim, nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
             nn.Linear(nf, 2 * nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
-            nn.Linear(2 * nf, nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
-            # nn.Linear(nf * 2, nf), nn.ReLU(),
+            nn.Linear(2 * nf, 2 * nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
+            nn.Linear(nf * 2, nf), nn.LeakyReLU(0.1),
             nn.Linear(nf, nz))
     loss_fn_z = nn.L1Loss()  # CrossEntropyLoss()
     loss_fn_r = nn.MSELoss()
@@ -245,7 +243,7 @@ if __name__ == '__main__':
     for x in r_model:
         params += x.parameters()
     optimizer = torch.optim.Adam(params, lr=1e-3)
-    num_epoch = 50000
+    num_epoch = 150000
 
     # Shuffle data: change to DataLoader
     ind = np.arange(st.shape[0])

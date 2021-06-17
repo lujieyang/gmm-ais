@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import copy
 import torch
 from torch.nn import functional as F
 import torch.nn as nn
@@ -79,7 +80,7 @@ def value_iteration(B, r, nz, na, z_list, epsilon=0.0001, discount_factor=0.95):
     return policy, V
 
 
-def eval_performance(policy, V, POMDP, start, D, na, B_det=None, n_episodes=100, beta=0.95):
+def eval_performance(policy, V, POMDP, start, D, na, tau=1, B_det=None, n_episodes=100, beta=0.95):
     returns = []
     Vs = []
     S = POMDP.S
@@ -87,9 +88,9 @@ def eval_performance(policy, V, POMDP, start, D, na, B_det=None, n_episodes=100,
         if n_eps % 10 == 0:
             print('Epoch :', n_eps)
         reward_episode = []
-        b = start
+        b = copy.deepcopy(start)
         s = S.Crop(b.rand())
-        z_one_hot = F.gumbel_softmax(D(torch.from_numpy(b.to_array()).to(torch.float32)), hard=True).data.numpy()
+        z_one_hot = F.gumbel_softmax(D(torch.from_numpy(b.to_array()).to(torch.float32)), tau=tau, hard=True).data.numpy()
         # z_one_hot = F.gumbel_softmax(D(torch.from_numpy(np.array(s).reshape(-1)).to(torch.float32)), hard=True).data.numpy()
 
         for j in range(30):
@@ -97,7 +98,10 @@ def eval_performance(policy, V, POMDP, start, D, na, B_det=None, n_episodes=100,
 
             Vs.append(V[ind_z])
 
-            action = np.arange(na)[policy[ind_z].astype(bool)][0]
+            try:
+                action = np.arange(na)[policy[ind_z].astype(bool)][0]
+            except:
+                action = np.random.randint(na)
 
             s, b, o, r, bn = POMDP.SimulationStep(b, s, action+1)
             reward_episode.append(r)
@@ -105,7 +109,7 @@ def eval_performance(policy, V, POMDP, start, D, na, B_det=None, n_episodes=100,
             if B_det is not None:
                 z_one_hot = B_det@z_one_hot
             else:
-                z_one_hot = F.gumbel_softmax(D(torch.from_numpy(b.to_array()).to(torch.float32)), hard=True).data.numpy()
+                z_one_hot = F.gumbel_softmax(D(torch.from_numpy(b.to_array()).to(torch.float32)), tau=tau, hard=True).data.numpy()
                 # z_one_hot = F.gumbel_softmax(D(torch.from_numpy(np.array(s).reshape(-1)).to(torch.float32)),
                 #                              hard=True).data.numpy()
 
@@ -124,12 +128,12 @@ def eval_performance(policy, V, POMDP, start, D, na, B_det=None, n_episodes=100,
     return average_return  # , V_mse/len(Vs)
 
 
-def interpret(BO, s, a, o, reward, D, r):
+def interpret(BO, s, a, o, reward, D, r, tau=1):
     num_samples = len(BO)
     dict = {}
     for i in range(num_samples):
         b = BO[i]
-        z = F.gumbel_softmax(D(torch.from_numpy(b.to_array()).to(torch.float32)), hard=True)
+        z = F.gumbel_softmax(D(torch.from_numpy(b.to_array()).to(torch.float32)), tau=tau, hard=True)
         # z = F.gumbel_softmax(D(torch.from_numpy(np.array(s[i]).reshape(-1)).to(torch.float32)), hard=True)
         z_one_hot = z.data.numpy()
         z_cluster = np.where(z_one_hot == 1)[0][0]
@@ -168,16 +172,16 @@ def minimize(dict, B, nz):
     return B
 
 
-def validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt, bp, b_next, reward, action_indices):
+def validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt, bp, b_next, reward, action_indices, tau=1):
     # Validation Loss
     pred_loss = 0
     r_loss = 0
     for i in range(nu):
         # Calculate loss for each (discrete) action
         ind = (np.array(action_indices) == i)
-        Db = F.gumbel_softmax(D(bt[ind]), hard=True)
+        Db = F.gumbel_softmax(D(bt[ind]), tau=tau, hard=True)
         z = B[i]@Db.detach().numpy().T
-        z_next = F.gumbel_softmax(D(bp[ind]), hard=True)
+        z_next = F.gumbel_softmax(D(bp[ind]), tau=tau, hard=True)
         r_pred = r[i](Db)
         pred_loss += loss_fn_z(torch.from_numpy(z.T).to(torch.float32), z_next)
         r_loss += loss_fn_r(r_pred, reward[ind])
@@ -185,7 +189,7 @@ def validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt, bp, b_next, reward, a
 
 
 def load_model(nz, nf, nu, tau):
-    folder_name = "model/"
+    folder_name = "model/" + "100k/"
     B = np.load(folder_name + "B_{}_{}_{}.npy".format(nz, nf, tau))
     r_dict = torch.load(folder_name + "r_{}_{}_{}.pth".format(nz, nf, tau))
     r = []
@@ -200,7 +204,7 @@ def load_model(nz, nf, nu, tau):
 
 
 if __name__ == '__main__':
-    nz = 30
+    nz = 40
     nu = 3
     nf = 96
     ncBelief = 5
@@ -208,11 +212,12 @@ if __name__ == '__main__':
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
     B, r, D = load_model(nz, nf, nu, tau)
 
-    num_samples = 1000
+    num_samples = 5000
     BO, BS, s, a, o, reward, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                                       P["stepsXtrial"], P["rMin"], P["rMax"])
     dict = interpret(BO, s, a, o, reward, D, r)
     B = minimize(dict, B, nz)
+    print("Minimized number of AIS: ", len(dict.keys()))
 
     bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward_values = \
         process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, reward)
@@ -227,6 +232,7 @@ if __name__ == '__main__':
     validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt_, bp_, b_next_, r_, action_indices)
 
     policy, V = value_iteration(B, r, nz, nu, dict.keys())
-    eval_performance(policy, V, POMDP, P["start"], D, nu)
+    # for i in range(10):
+    eval_performance(policy, V, POMDP, P["start"], D, nu, beta=1)
 
 
