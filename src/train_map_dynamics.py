@@ -11,66 +11,6 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.nn.modules import Module
 from Experiments.GetTestParameters import GetTest1Parameters
 
-class nD_Linear(Module):
-    r"""Applies a linear transformation to the incoming data: :math:`y = xA^T + b`
-        This module supports :ref:`TensorFloat32<tf32_on_ampere>`.
-        Args:
-            tensor_features: size of first dimension of tensor
-            in_features: size of each input sample
-            out_features: size of each output sample
-            bias: If set to ``False``, the layer will not learn an additive bias.
-                Default: ``True``
-        Shape:
-            - Input: :math:`(N, *, H_{in})` where :math:`*` means any number of
-              additional dimensions and :math:`H_{in} = \text{in\_features}`
-            - Output: :math:`(N, tensor_feature, *, H_{out})` where all but the last dimension
-              are the same shape as the input and :math:`H_{out} = \text{out\_features}`.
-        Attributes:
-            weight: the learnable weights of the module of shape
-                :math:`(\text{out\_features}, \text{in\_features})`. The values are
-                initialized from :math:`\mathcal{U}(-\sqrt{k}, \sqrt{k})`, where
-                :math:`k = \frac{1}{\text{in\_features}}`
-            bias:   the learnable bias of the module of shape :math:`(\text{out\_features})`.
-                    If :attr:`bias` is ``True``, the values are initialized from
-                    :math:`\mathcal{U}(-\sqrt{k}, \sqrt{k})` where
-                    :math:`k = \frac{1}{\text{in\_features}}`
-    """
-    __constants__ = ['in_features', 'out_features']
-    tensor_features: int
-    in_features: int
-    out_features: int
-    weight: Tensor
-
-    def __init__(self, tensor_features: int, in_features: int, out_features: int, bias: bool = True) -> None:
-        super(nD_Linear, self).__init__()
-        self.tensor_features = tensor_features
-        self.in_features = in_features
-        self.out_features = out_features
-        self.weight = Parameter(torch.Tensor(tensor_features, out_features, in_features))
-        if bias:
-            self.bias = Parameter(torch.Tensor(tensor_features, out_features))
-        else:
-            self.register_parameter('bias', None)
-        self.reset_parameters()
-
-    def reset_parameters(self) -> None:
-        init.kaiming_uniform_(self.weight, a=math.sqrt(5))
-        if self.bias is not None:
-            fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
-            bound = 1 / math.sqrt(fan_in)
-            init.uniform_(self.bias, -bound, bound)
-
-    def forward(self, input: Tensor) -> Tensor:
-        if self.bias is not None:
-            return (self.weight@input.T).permute(2,0,1)+ self.bias
-        else:
-            return (self.weight@input.T).permute(2,0,1)
-
-    def extra_repr(self) -> str:
-        return 'tensor_features = {}, in_features={}, out_features={}, bias={}'.format(
-            self.tensor_features, self.in_features, self.out_features, self.bias is not None
-        )
-
 
 def action_obs_1d_ind(nu, no, actions, obs):
     K = np.arange(nu*no).reshape((nu, no))
@@ -100,6 +40,18 @@ def cal_loss(B_model, r_model, D_pre_model, loss_fn_z, loss_fn_r, nu, bt, bp, b_
             z_next_o = F.gumbel_softmax(D_pre_model(b_next), tau=tau, hard=True)
             pred_loss += loss_fn_z(z_det[torch.arange(len(action_obs_ind)), action_obs_ind, :], z_next_o)
     return pred_loss, r_loss
+
+
+def minimize_AIS(D_pre_model, nu, nz, bt, bp, actions, tau=1):
+    z_list = np.zeros(nz)
+    for i in range(nu):
+        # Calculate loss for each (discrete) action
+        ind = (actions == i)
+        Db = F.gumbel_softmax(D_pre_model(bt[ind]), tau=tau, hard=True).detach().numpy()
+        z_next = F.gumbel_softmax(D_pre_model(bp[ind]), tau=tau, hard=True).detach().numpy()
+        z_list += np.sum(Db+z_next, axis=0)
+    z_ind = np.arange(nz)
+    return z_ind[z_list > 0]
 
 
 def fit_state_loss(r_model_u, loss_fn, s, r, actions, nu):
@@ -164,8 +116,8 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r):
            g_dim, action_indices[:-1], observation_indices[:-1], np.array(reward[:-1])
 
 
-def save_model(B_model, r_model, D_pre_model, nz, nf, tau, B_det_model=None):
-    folder_name = "model/" + "500k/"
+def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model=None):
+    folder_name = "model/" #+ "500k/"
     if B_det_model is not None:
         folder_name += "det/"
         B_det_model.cpu()
@@ -179,9 +131,27 @@ def save_model(B_model, r_model, D_pre_model, nz, nf, tau, B_det_model=None):
         r_dict[str(i)] = r_model[i].state_dict()
         r_dict["model_" + str(i)] = r_model[i]
     np.save(folder_name + "B_{}_{}_{}".format(nz, nf, tau), B)
+    np.save(folder_name + "zList_{}_{}_{}".format(nz, nf, tau), z_list)
     torch.save(r_dict, folder_name + "r_{}_{}_{}.pth".format(nz, nf, tau))
     torch.save(D_pre_model.state_dict(), folder_name + "D_pre_{}_{}_{}.pth".format(nz, nf, tau))
     torch.save(D_pre_model, folder_name + "D_pre_{}_{}_{}_model.pth".format(nz, nf, tau))
+
+
+def load_model(nz, nf, nu, tau):
+    folder_name = "model/" + "500k/6_layer/"
+    B = np.load(folder_name + "B_{}_{}_{}.npy".format(nz, nf, tau))
+    # z_list = np.load(folder_name + "zList_{}_{}_{}.npy".format(nz, nf, tau))
+    z_list = np.arange(nz)
+    r_dict = torch.load(folder_name + "r_{}_{}_{}.pth".format(nz, nf, tau))
+    r = []
+    for i in range(nu):
+        r.append(r_dict["model_" + str(i)])
+        r[i].load_state_dict(r_dict[str(i)])
+        r[i].eval()
+    D = torch.load(folder_name + "D_pre_{}_{}_{}_model.pth".format(nz, nf, tau))
+    D.load_state_dict(torch.load(folder_name + "D_pre_{}_{}_{}.pth".format(nz, nf, tau)))
+    D.eval()
+    return B, r, D, z_list
 
 
 if __name__ == '__main__':
@@ -189,15 +159,16 @@ if __name__ == '__main__':
     parser.add_argument("--det_trans", help="Fit the deterministic transition of AIS (AP2a)", action="store_true")
     parser.add_argument("--pred_obs", help="Predict the observation (AP2b)", action="store_true")
     parser.add_argument("--tau", help="Temperature for Gumbel Softmax", type=float, default=1)
+    parser.add_argument("--resume_training", help="Resume training for the model", action="store_true")
     args = parser.parse_args()
 
     # Sample belief states data
     ncBelief = 5
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
-    num_samples = 500000
+    num_samples = 10#0000
     BO, BS, s, a, o, r, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                                       P["stepsXtrial"], P["rMin"], P["rMax"])
-    nz = 30
+    nz = 40
     nu = 3
     no = 4
     tau = args.tau
@@ -233,9 +204,11 @@ if __name__ == '__main__':
     D_pre_model.to(device)
     B_det_model = None
     if args.det_trans:
-        B_det_model = nD_Linear(nu*no, nz, nz, bias=False)
         project_col_sum(B_det_model)
         B_det_model.to(device)
+
+    if args.resume_training:
+        B, r_model, D_pre_model, z_list = load_model(nz, nf, nu, tau)
 
     params = list(D_pre_model.parameters())
     for x in B_model:
@@ -274,6 +247,7 @@ if __name__ == '__main__':
     writer.flush()
 
     D_pre_model.cpu()
-    save_model(B_model, r_model, D_pre_model, nz, nf, tau, B_det_model)
+    z_list = minimize_AIS(D_pre_model, nu, nz, bt_, bp_, action_indices, tau=1)
+    save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model)
 
 

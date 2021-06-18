@@ -5,7 +5,7 @@ import torch
 from torch.nn import functional as F
 import torch.nn as nn
 from Experiments.GetTestParameters import GetTest1Parameters
-from src.train_map_dynamics import *
+from src.train_map_dynamics import process_belief, load_model
 
 def value_iteration(B, r, nz, na, z_list, epsilon=0.0001, discount_factor=0.95):
     """
@@ -85,8 +85,8 @@ def eval_performance(policy, V, POMDP, start, D, na, tau=1, B_det=None, n_episod
     Vs = []
     S = POMDP.S
     for n_eps in range(n_episodes):
-        if n_eps % 10 == 0:
-            print('Epoch :', n_eps)
+        # if n_eps % 10 == 0:
+        #     print('Epoch :', n_eps)
         reward_episode = []
         b = copy.deepcopy(start)
         s = S.Crop(b.rand())
@@ -156,7 +156,7 @@ def interpret(BO, s, a, o, reward, D, r, tau=1):
 
     for c in dict.keys():
         r_pred = np.array(dict[c]["r_pred"])
-        if (r_pred > 1).any():
+        if (r_pred > 0).any():
             plt.plot(dict[c]["s"], dict[c]["r"], 'rx')
             plt.plot(dict[c]["s"], dict[c]["r_pred"], 'k.')
             plt.title(str(c))
@@ -164,9 +164,9 @@ def interpret(BO, s, a, o, reward, D, r, tau=1):
     return dict
 
 
-def minimize(dict, B, nz):
+def minimize_B(z_list, B, nz):
     for j in range(nz):
-        if j not in dict.keys():
+        if j not in z_list:
             B[:, j, :] = 0
             B[:, :, j] = 0
     return B
@@ -188,21 +188,6 @@ def validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt, bp, b_next, reward, a
     print("Prediction loss: {}, reward loss: {}".format(pred_loss, r_loss))
 
 
-def load_model(nz, nf, nu, tau):
-    folder_name = "model/" + "100k/"
-    B = np.load(folder_name + "B_{}_{}_{}.npy".format(nz, nf, tau))
-    r_dict = torch.load(folder_name + "r_{}_{}_{}.pth".format(nz, nf, tau))
-    r = []
-    for i in range(nu):
-        r.append(r_dict["model_" + str(i)])
-        r[i].load_state_dict(r_dict[str(i)])
-        r[i].eval()
-    D = torch.load(folder_name + "D_pre_{}_{}_{}_model.pth".format(nz, nf, tau))
-    D.load_state_dict(torch.load(folder_name + "D_pre_{}_{}_{}.pth".format(nz, nf, tau)))
-    D.eval()
-    return B, r, D
-
-
 if __name__ == '__main__':
     nz = 40
     nu = 3
@@ -210,13 +195,13 @@ if __name__ == '__main__':
     ncBelief = 5
     tau = 1
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
-    B, r, D = load_model(nz, nf, nu, tau)
+    B, r, D, z_list = load_model(nz, nf, nu, tau)
 
     num_samples = 5000
     BO, BS, s, a, o, reward, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                                       P["stepsXtrial"], P["rMin"], P["rMax"])
     dict = interpret(BO, s, a, o, reward, D, r)
-    B = minimize(dict, B, nz)
+    B = minimize_B(dict.keys(), B, nz)
     print("Minimized number of AIS: ", len(dict.keys()))
 
     bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward_values = \
@@ -232,7 +217,10 @@ if __name__ == '__main__':
     validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt_, bp_, b_next_, r_, action_indices)
 
     policy, V = value_iteration(B, r, nz, nu, dict.keys())
-    # for i in range(10):
-    eval_performance(policy, V, POMDP, P["start"], D, nu, beta=1)
+    aR = []
+    for i in range(100):
+        print("Trial ", i)
+        aR.append(eval_performance(policy, V, POMDP, P["start"], D, nu))
+    print("Average reward: ", np.mean(np.array(aR)))
 
 
