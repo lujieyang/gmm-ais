@@ -12,4 +12,4 @@ class CS_DA_RewardModel:
         :param s:
         :return:
         """
-        return self.r[int(a)-1].Value(s) * 10
+        return self.r[int(a)-1].Value(s) #* 10
