@@ -4,6 +4,7 @@ import argparse
 import torch
 from torch.nn import functional as F
 import torch.nn as nn
+from torch.optim.lr_scheduler import StepLR
 from torch.utils.tensorboard import SummaryWriter
 from Experiments.GetTestParameters import GetTest1Parameters
 
@@ -43,8 +44,8 @@ def minimize_AIS(D_pre_model, nu, nz, bt, bp, actions, tau=1):
     for i in range(nu):
         # Calculate loss for each (discrete) action
         ind = (actions == i)
-        Db = F.gumbel_softmax(D_pre_model(bt[ind]), tau=tau, hard=True).detach().numpy()
-        z_next = F.gumbel_softmax(D_pre_model(bp[ind]), tau=tau, hard=True).detach().numpy()
+        Db = F.gumbel_softmax(D_pre_model(bt[ind]), tau=tau, hard=True).cpu().detach().numpy()
+        z_next = F.gumbel_softmax(D_pre_model(bp[ind]), tau=tau, hard=True).cpu().detach().numpy()
         z_list += np.sum(Db+z_next, axis=0)
     z_ind = np.arange(nz)
     return z_ind[z_list > 0]
@@ -134,7 +135,7 @@ def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model=N
 
 
 def load_model(nz, nf, nu, tau):
-    folder_name = "model/" + "100k/" + "6_layer/"
+    folder_name = "model/" + "100k/" + "6_layer/" + "scheduler/"
     B = np.load(folder_name + "B_{}_{}_{}.npy".format(nz, nf, tau))
     z_list = np.load(folder_name + "zList_{}_{}_{}.npy".format(nz, nf, tau))
     # z_list = np.arange(nz)
@@ -156,10 +157,11 @@ if __name__ == '__main__':
     parser.add_argument("--pred_obs", help="Predict the observation (AP2b)", action="store_true")
     parser.add_argument("--tau", help="Temperature for Gumbel Softmax", type=float, default=1)
     parser.add_argument("--resume_training", help="Resume training for the model", action="store_true")
+    parser.add_argument("--scheduler", help="Set StepLR scheduler", action="store_true")
     args = parser.parse_args()
 
     # Sample belief states data
-    ncBelief = 5
+    ncBelief = 10  #5
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
     num_samples = 100000
     BO, BS, s, a, o, r, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
@@ -213,7 +215,12 @@ if __name__ == '__main__':
     for x in r_model:
         params += x.parameters()
     optimizer = torch.optim.Adam(params, lr=1e-3)
-    num_epoch = 150000
+
+    scheduler = None
+    if args.scheduler:
+        scheduler = StepLR(optimizer, step_size=10000, gamma=0.1)
+
+    num_epoch = 100000
 
     # Shuffle data: change to DataLoader
     ind = np.arange(st.shape[0])
@@ -233,6 +240,8 @@ if __name__ == '__main__':
         loss = pred_loss + r_loss
         loss.backward()
         optimizer.step()
+        if scheduler is not None:
+            scheduler.step()
         # Projected Gradient Descent to ensure column sum of B = 1
         project_col_sum(B_model)
         if B_det_model is not None:
@@ -243,8 +252,8 @@ if __name__ == '__main__':
         writer.add_scalar("Loss/{}_sample_{}_nz".format(num_samples, nz), loss, epoch)
     writer.flush()
 
-    D_pre_model.cpu()
     z_list = minimize_AIS(D_pre_model, nu, nz, bt_, bp_, action_indices, tau=1)
+    D_pre_model.cpu()
     save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model)
 
 
