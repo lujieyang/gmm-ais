@@ -165,11 +165,12 @@ def interpret(BO, s, a, o, reward, D, r, tau=1):
 
 
 def minimize_B(z_list, B, nz):
-    for j in range(nz):
-        if j not in z_list:
-            B[:, j, :] = 0
-            B[:, :, j] = 0
-    return B
+    remove_list = np.array(list(set(range(nz)) - set(z_list)))
+    B[:, remove_list, :] = 0
+    B[:, :, remove_list] = 0
+    # B_sum = np.sum(B, axis=1).reshape((B.shape[0], 1, B.shape[1]))
+    # B_sum[:, 0, remove_list] = 1
+    return B #/B_sum
 
 
 def validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt, bp, b_next, reward, action_indices, tau=1):
@@ -189,7 +190,7 @@ def validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt, bp, b_next, reward, a
 
 
 if __name__ == '__main__':
-    nz = 40
+    nz = 250
     nu = 3
     nf = 96
     ncBelief = 5
@@ -200,8 +201,9 @@ if __name__ == '__main__':
     num_samples = 5000
     BO, BS, s, a, o, reward, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                                       P["stepsXtrial"], P["rMin"], P["rMax"])
-    dict = interpret(BO, s, a, o, reward, D, r)
-    B = minimize_B(dict.keys(), B, nz)
+    dict = interpret(BO, s, a, o, reward, D, r, tau=tau)
+    # B = minimize_B(dict.keys(), B, nz)
+    B = minimize_B(z_list, B, nz)
     print("Minimized number of AIS: ", len(dict.keys()))
 
     bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward_values = \
@@ -214,13 +216,13 @@ if __name__ == '__main__':
     r_ = torch.from_numpy(reward_values).view(st.shape[0], 1).to(torch.float32)
     loss_fn_z = nn.L1Loss()
     loss_fn_r = nn.MSELoss()
-    validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt_, bp_, b_next_, r_, action_indices)
+    validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt_, bp_, b_next_, r_, action_indices, tau=tau)
 
-    policy, V = value_iteration(B, r, nz, nu, dict.keys())
+    policy, V = value_iteration(B, r, nz, nu, z_list) #dict.keys())
     aR = []
     for i in range(100):
         print("Trial ", i)
-        aR.append(eval_performance(policy, V, POMDP, P["start"], D, nu))
+        aR.append(eval_performance(policy, V, POMDP, P["start"], D, nu, tau=tau))
     print("Average reward: ", np.mean(np.array(aR)))
 
 

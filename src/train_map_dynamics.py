@@ -2,13 +2,9 @@ import math
 import numpy as np
 import argparse
 import torch
-from torch import Tensor
-from torch.nn.parameter import Parameter
 from torch.nn import functional as F
 import torch.nn as nn
-from torch.nn import init
 from torch.utils.tensorboard import SummaryWriter
-from torch.nn.modules import Module
 from Experiments.GetTestParameters import GetTest1Parameters
 
 
@@ -138,10 +134,10 @@ def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model=N
 
 
 def load_model(nz, nf, nu, tau):
-    folder_name = "model/" + "500k/6_layer/"
+    folder_name = "model/" + "100k/" + "6_layer/"
     B = np.load(folder_name + "B_{}_{}_{}.npy".format(nz, nf, tau))
-    # z_list = np.load(folder_name + "zList_{}_{}_{}.npy".format(nz, nf, tau))
-    z_list = np.arange(nz)
+    z_list = np.load(folder_name + "zList_{}_{}_{}.npy".format(nz, nf, tau))
+    # z_list = np.arange(nz)
     r_dict = torch.load(folder_name + "r_{}_{}_{}.pth".format(nz, nf, tau))
     r = []
     for i in range(nu):
@@ -165,7 +161,7 @@ if __name__ == '__main__':
     # Sample belief states data
     ncBelief = 5
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
-    num_samples = 10#0000
+    num_samples = 100000
     BO, BS, s, a, o, r, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                                       P["stepsXtrial"], P["rMin"], P["rMax"])
     nz = 40
@@ -196,7 +192,8 @@ if __name__ == '__main__':
     D_pre_model = nn.Sequential(
             nn.Linear(input_dim, nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
             nn.Linear(nf, 2 * nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
-            nn.Linear(2 * nf, 2 * nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
+            nn.Linear(2 * nf, 4 * nf), nn.LeakyReLU(0.1),
+            nn.Linear(4 * nf, 2 * nf), nn.LeakyReLU(0.1),
             nn.Linear(nf * 2, nf), nn.LeakyReLU(0.1),
             nn.Linear(nf, nz))
     loss_fn_z = nn.L1Loss()  # CrossEntropyLoss()
