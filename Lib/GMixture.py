@@ -117,7 +117,7 @@ class GMixture:
                 gmC.w[i] = np.sum(self.w[mapLC[ndx]])
                 # gmC.w[i] = np.sum(gmN.w[mapLC[ndx]])
 
-            gmC, map = gmC.RemoveSmallComponents(1e-6)
+#            gmC, map = gmC.RemoveSmallComponents(1e-6)
 
             return gmC
 

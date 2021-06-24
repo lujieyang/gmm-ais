@@ -43,7 +43,7 @@ def cal_loss(B_model, r_model, D_pre_model, loss_fn_z, loss_fn_r, nu, no, bt, bp
             Db = F.gumbel_softmax(D_pre_model(bt[ind]), tau=tau, hard=True)
             z_det = B_det_model[i](Db)
             z_next_o = F.gumbel_softmax(D_pre_model(b_next), tau=tau, hard=True)
-            pred_loss += loss_fn_z(z_det[torch.arange(len(action_obs_ind)), action_obs_ind, :], z_next_o)
+            pred_loss += loss_fn_z(z_det, z_next_o[ind])
 
     return pred_loss, r_loss, obs_loss
 
@@ -188,7 +188,7 @@ if __name__ == '__main__':
     num_samples = 100000
     BO, BS, s, a, o, r, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                                       P["stepsXtrial"], P["rMin"], P["rMax"])
-    nz = 40
+    nz = 1000
     nu = 3
     no = 4
     tau = args.tau
