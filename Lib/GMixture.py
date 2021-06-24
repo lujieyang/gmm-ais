@@ -35,7 +35,7 @@ class GMixture:
         if isinstance(gm2, GMixture):
             return self.Product(gm2)
         else:
-            gm = copy.copy(self)
+            gm = copy.deepcopy(self)
             gm.w = gm2 * gm.w
             return gm
 
@@ -114,9 +114,10 @@ class GMixture:
             for i in range(gmC.n):
                 ndx = np.where(mapC == i)[0]
                 # Original code self.w
-                gmC.w[i] = np.sum(gmN.w[mapLC[ndx]])
+                gmC.w[i] = np.sum(self.w[mapLC[ndx]])
+                # gmC.w[i] = np.sum(gmN.w[mapLC[ndx]])
 
-            gmC, map = gmC.RemoveSmallComponents(1e-3)
+            gmC, map = gmC.RemoveSmallComponents(1e-6)
 
             return gmC
 
@@ -134,7 +135,7 @@ class GMixture:
         output one
         """
         if self.n <= m:
-            gmC = copy.copy(self)
+            gmC = copy.deepcopy(self)
             map = np.arange(self.n)
         else:
             gmC = self.GetLargestComponents(m)
@@ -157,7 +158,7 @@ class GMixture:
                         gmC.w[j] = sw
                         g = []
                         for k in ndx:
-                            g.append(copy.copy(self.g[k]))
+                            g.append(copy.deepcopy(self.g[k]))
                         gmC.g[j] = GMixture(self.w[ndx]/sw, g).FuseComponents()
                     else:
                         # None of the components of gm is close to this component of gmC
@@ -197,14 +198,14 @@ class GMixture:
     def GetLargestComponents(self, m):
         """a Gaussian mixture formed by the 'm' elements of the input mixture with larger weight. """
         if self.n <= m:
-            return copy.copy(self)
+            return copy.deepcopy(self)
         else:
             # Sort weights in descending order
             idx = np.argsort(self.w)[::-1][:m]
             nw = self.w[idx]
             g = []
             for i in idx:
-                g.append(copy.copy(self.g[i]))
+                g.append(copy.deepcopy(self.g[i]))
             return GMixture(nw/np.sum(nw), g)
 
     def RemoveSmallComponents(self, t):
@@ -221,7 +222,7 @@ class GMixture:
         map = np.where(np.abs(self.w) > t)[0]
         g = []
         for i in map:
-            g.append(copy.copy(self.g[i]))
+            g.append(copy.deepcopy(self.g[i]))
         gmOut = GMixture(self.w[map], g)
         return gmOut, map
 
@@ -253,7 +254,7 @@ class GMixture:
         :param g:
         :return:
         """
-        gmOut = copy.copy(self)
+        gmOut = copy.deepcopy(self)
         for i in range(self.n):
             gmOut.g[i] = g + self.g[i]
         return gmOut

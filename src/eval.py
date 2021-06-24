@@ -103,7 +103,7 @@ def eval_performance(policy, V, POMDP, start, D, na, tau=1, B_det=None, n_episod
             except:
                 action = np.random.randint(na)
 
-            s, b, o, r, bn = POMDP.SimulationStep(b, s, action+1)
+            s, b, o, r = POMDP.SimulationStep(b, s, action+1)
             reward_episode.append(r)
 
             if B_det is not None:
@@ -156,7 +156,7 @@ def interpret(BO, s, a, o, reward, D, r, tau=1):
 
     for c in dict.keys():
         r_pred = np.array(dict[c]["r_pred"])
-        if (r_pred > 0).any():
+        if (r_pred > 1).any():
             plt.plot(dict[c]["s"], dict[c]["r"], 'rx')
             plt.plot(dict[c]["s"], dict[c]["r_pred"], 'k.')
             plt.title(str(c))
@@ -190,33 +190,33 @@ def validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt, bp, b_next, reward, a
 
 
 if __name__ == '__main__':
-    nz = 250
+    nz = 1000
     nu = 3
     nf = 96
-    ncBelief = 5
+    ncBelief = 10
     tau = 1
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
     B, r, D, z_list = load_model(nz, nf, nu, tau)
 
     num_samples = 5000
-    BO, BS, s, a, o, reward, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
+    BO, BS, s, a, o, reward, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                                       P["stepsXtrial"], P["rMin"], P["rMax"])
-    dict = interpret(BO, s, a, o, reward, D, r, tau=tau)
+    # dict = interpret(BO, s, a, o, reward, D, r, tau=tau)
     # B = minimize_B(dict.keys(), B, nz)
     B = minimize_B(z_list, B, nz)
-    print("Minimized number of AIS: ", len(dict.keys()))
+    # print("Minimized number of AIS: ", len(dict.keys()))
 
-    bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward_values = \
-        process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, reward)
-    st_ = torch.from_numpy(st).view(st.shape[0], 1).to(torch.float32)
-    s_next_ = torch.from_numpy(s_next).view(bt.shape[0], 1).to(torch.float32)
-    bt_ = torch.from_numpy(bt).to(torch.float32)
-    bp_ = torch.from_numpy(bp).to(torch.float32)
-    b_next_ = torch.from_numpy(b_next).to(torch.float32)
-    r_ = torch.from_numpy(reward_values).view(st.shape[0], 1).to(torch.float32)
-    loss_fn_z = nn.L1Loss()
-    loss_fn_r = nn.MSELoss()
-    validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt_, bp_, b_next_, r_, action_indices, tau=tau)
+    bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward_values, P_o_ba_t = \
+        process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, reward, P_o_ba)
+    # st_ = torch.from_numpy(st).view(st.shape[0], 1).to(torch.float32)
+    # s_next_ = torch.from_numpy(s_next).view(bt.shape[0], 1).to(torch.float32)
+    # bt_ = torch.from_numpy(bt).to(torch.float32)
+    # bp_ = torch.from_numpy(bp).to(torch.float32)
+    # b_next_ = torch.from_numpy(b_next).to(torch.float32)
+    # r_ = torch.from_numpy(reward_values).view(st.shape[0], 1).to(torch.float32)
+    # loss_fn_z = nn.L1Loss()
+    # loss_fn_r = nn.MSELoss()
+    # validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt_, bp_, b_next_, r_, action_indices, tau=tau)
 
     policy, V = value_iteration(B, r, nz, nu, z_list) #dict.keys())
     aR = []

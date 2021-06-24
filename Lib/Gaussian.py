@@ -70,7 +70,7 @@ class Gaussian:
         :param Sp:
         :return:
         """
-        gOut = copy.copy(self)
+        gOut = copy.deepcopy(self)
         gOut.m = Sp.Crop(self.m)
         return gOut
 

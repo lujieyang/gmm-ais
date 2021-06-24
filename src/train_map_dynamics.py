@@ -17,26 +17,35 @@ def action_obs_1d_ind(nu, no, actions, obs):
     return ind
 
 
-def cal_loss(B_model, r_model, D_pre_model, loss_fn_z, loss_fn_r, nu, bt, bp, b_next, actions, action_obs_ind, r,
-             l=1, tau=1, B_det_model=None):
+def cal_loss(B_model, r_model, D_pre_model, loss_fn_z, loss_fn_r, nu, no, bt, bp, b_next, actions, action_obs_ind, r,
+             l=1, tau=1, B_det_model=None, P_o_za_model=None, P_o_ba=None):
     pred_loss = 0
     r_loss = 0
+    obs_loss = 0
     for i in range(nu):
         # Calculate loss for each (discrete) action
         ind = (actions == i)
         Db = F.gumbel_softmax(D_pre_model(bt[ind]), tau=tau, hard=True)
-        z = B_model[i](Db)
-        z_next = F.gumbel_softmax(D_pre_model(bp[ind]), tau=tau, hard=True)
-        # Obtain class for cross entropy loss
-        # _, z_next_class = z_next.max(dim=1)
+        if B_det_model is None:
+            z = B_model[i](Db)
+            z_next = F.gumbel_softmax(D_pre_model(bp[ind]), tau=tau, hard=True)
+            # Obtain class for cross entropy loss
+            # _, z_next_class = z_next.max(dim=1)
+            pred_loss += loss_fn_z(z, z_next)
         r_pred = r_model[i](Db)
-        pred_loss += loss_fn_z(z, z_next)
         r_loss += l*loss_fn_r(r_pred, r[ind])
-        if B_det_model is not None:
-            z_det = B_det_model(Db)
+        if P_o_za_model is not None:
+            obs_pred = P_o_za_model[i](Db)
+            obs_loss += loss_fn_r(obs_pred, P_o_ba[ind])
+    if B_det_model is not None:
+        for i in range(nu * no):
+            ind = (action_obs_ind == i)
+            Db = F.gumbel_softmax(D_pre_model(bt[ind]), tau=tau, hard=True)
+            z_det = B_det_model[i](Db)
             z_next_o = F.gumbel_softmax(D_pre_model(b_next), tau=tau, hard=True)
             pred_loss += loss_fn_z(z_det[torch.arange(len(action_obs_ind)), action_obs_ind, :], z_next_o)
-    return pred_loss, r_loss
+
+    return pred_loss, r_loss, obs_loss
 
 
 def minimize_AIS(D_pre_model, nu, nz, bt, bp, actions, tau=1):
@@ -72,7 +81,7 @@ def project_col_sum(model):
         model[i].weight.data = d/s
 
 
-def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r):
+def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba):
     step_ind_copy = np.array(step_ind)
     # Remove the first belief before observation (useless)
     B.pop(0)
@@ -86,6 +95,7 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r):
     action_indices = []
     observation_indices = []
     reward = []
+    P_o_ba_t = []
     if g_dim == 1:
         for i in range(num_samples):
             b = BO[i].to_array()
@@ -101,6 +111,7 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r):
                 action_indices.append(int(a[i] - 1))
                 observation_indices.append(int(o[i]))
                 reward.append(r[i])
+                P_o_ba_t.append(P_o_ba[i])
                 if i < num_samples - 1:
                     b_next_p.append(bp)
                     s_next.append(s[i+1])
@@ -110,24 +121,35 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r):
         pass
 
     return np.array(bt[:-1]), np.array(b_next), np.array(b_next_p), np.array(st[:-1]), np.array(s_next), input_dim, \
-           g_dim, action_indices[:-1], observation_indices[:-1], np.array(reward[:-1])
+           g_dim, action_indices[:-1], observation_indices[:-1], np.array(reward[:-1]), np.array(P_o_ba_t[:-1])
 
 
-def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model=None):
-    folder_name = "model/" #+ "500k/"
-    if B_det_model is not None:
-        folder_name += "det/"
-        B_det_model.cpu()
-        np.save(folder_name + "B_det_{}_{}".format(nz, nf), B_det_model.weight.data.numpy())
-    B = []
+def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model=None, P_o_za_model=None):
+    folder_name = "model/" + "100k/"
     r_dict = {}
-    for i in range(len(B_model)):
-        B_model[i].cpu()
-        B.append(B_model[i].weight.data.numpy())
-        r_model[i].cpu()
-        r_dict[str(i)] = r_model[i].state_dict()
-        r_dict["model_" + str(i)] = r_model[i]
-    np.save(folder_name + "B_{}_{}_{}".format(nz, nf, tau), B)
+    if B_det_model is not None:
+        folder_name += "AP2ab/"
+        B_det = []
+        for i in range(len(B_det_model)):
+            B_det_model[i].cpu()
+            B_det.append(B_det_model[i].weight.data.numpy())
+        np.save(folder_name + "B_det_{}_{}_{}".format(nz, nf, tau), B_det)
+    else:
+        B = []
+        for i in range(len(B_model)):
+            B_model[i].cpu()
+            B.append(B_model[i].weight.data.numpy())
+            r_model[i].cpu()
+            r_dict[str(i)] = r_model[i].state_dict()
+            r_dict["model_" + str(i)] = r_model[i]
+        np.save(folder_name + "B_{}_{}_{}".format(nz, nf, tau), B)
+    if P_o_za_model is not None:
+        P_o_za = []
+        for i in range(len(P_o_za_model)):
+            P_o_za_model[i].cpu()
+            P_o_za.append(P_o_za_model[i].weight.data.numpy())
+        np.save(folder_name + "P_o_za_{}_{}_{}".format(nz, nf, tau), P_o_za)
+
     np.save(folder_name + "zList_{}_{}_{}".format(nz, nf, tau), z_list)
     torch.save(r_dict, folder_name + "r_{}_{}_{}.pth".format(nz, nf, tau))
     torch.save(D_pre_model.state_dict(), folder_name + "D_pre_{}_{}_{}.pth".format(nz, nf, tau))
@@ -164,15 +186,15 @@ if __name__ == '__main__':
     ncBelief = 10  #5
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
     num_samples = 100000
-    BO, BS, s, a, o, r, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
+    BO, BS, s, a, o, r, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                                       P["stepsXtrial"], P["rMin"], P["rMax"])
     nz = 40
     nu = 3
     no = 4
     tau = args.tau
 
-    bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward = \
-        process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, r)
+    bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward, P_o_ba_t = \
+        process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba)
     action_obs_ind = action_obs_1d_ind(nu, no, action_indices, observation_indices)
 
     # "End-to-end" training to minimize AP12
@@ -203,15 +225,30 @@ if __name__ == '__main__':
     D_pre_model.to(device)
     B_det_model = None
     if args.det_trans:
+        B_det_model = []
+        for i in range(nu * no):
+            B_det_model.append(nn.Linear(nz, nz, bias=False).to(device))
         project_col_sum(B_det_model)
-        B_det_model.to(device)
+    P_o_za_model = None
+    if args.pred_obs:
+        P_o_za_model = []
+        for i in range(nu):
+            P_o_za_model.append(nn.Linear(nz, no, bias=False).to(device))
+        project_col_sum(P_o_za_model)
 
     if args.resume_training:
         B, r_model, D_pre_model, z_list = load_model(nz, nf, nu, tau)
 
     params = list(D_pre_model.parameters())
-    for x in B_model:
-        params += x.parameters()
+    if B_det_model is None:
+        for x in B_model:
+            params += x.parameters()
+    else:
+        for x in B_det_model:
+            params += x.parameters()
+    if P_o_za_model is not None:
+        for x in P_o_za_model:
+            params += x.parameters()
     for x in r_model:
         params += x.parameters()
     optimizer = torch.optim.Adam(params, lr=1e-3)
@@ -226,18 +263,21 @@ if __name__ == '__main__':
     ind = np.arange(st.shape[0])
     np.random.shuffle(ind)
     st_ = torch.from_numpy(st[ind]).view(st.shape[0], 1).to(torch.float32).to(device)
-    s_next_ = torch.from_numpy(s_next[ind]).view(bt.shape[0], 1).to(torch.float32).to(device)
+    s_next_ = torch.from_numpy(s_next[ind]).view(s_next.shape[0], 1).to(torch.float32).to(device)
     bt_ = torch.from_numpy(bt[ind]).to(torch.float32).to(device)
     bp_ = torch.from_numpy(bp[ind]).to(torch.float32).to(device)
     b_next_ = torch.from_numpy(b_next[ind]).to(torch.float32).to(device)
     r_ = torch.from_numpy(reward[ind]).view(st.shape[0], 1).to(torch.float32).to(device)
+    P_o_ba_t_ = torch.from_numpy(P_o_ba_t[ind]).to(torch.float32).to(device)
     action_indices = np.array(action_indices)[ind]
+    action_obs_ind = np.array(action_obs_ind)[ind]
 
     for epoch in range(num_epoch):
         optimizer.zero_grad()
-        pred_loss, r_loss = cal_loss(B_model, r_model, D_pre_model, loss_fn_z, loss_fn_r, nu, bt_, bp_, b_next_,
-                                     action_indices, action_obs_ind, r_, l=10, tau=tau, B_det_model=B_det_model)
-        loss = pred_loss + r_loss
+        pred_loss, r_loss, obs_loss = cal_loss(B_model, r_model, D_pre_model, loss_fn_z, loss_fn_r, nu, no, bt_, bp_,
+                                               b_next_, action_indices, action_obs_ind, r_, l=10, tau=tau,
+                                               B_det_model=B_det_model, P_o_za_model=P_o_za_model, P_o_ba=P_o_ba_t_)
+        loss = pred_loss + r_loss + obs_loss
         loss.backward()
         optimizer.step()
         if scheduler is not None:
@@ -246,14 +286,16 @@ if __name__ == '__main__':
         project_col_sum(B_model)
         if B_det_model is not None:
             project_col_sum(B_det_model)
+        if P_o_za_model is not None:
+            project_col_sum(P_o_za_model)
         if epoch % 100 == 0:
             print(epoch)
-            print("Prediction loss: {}, reward loss: {}".format(pred_loss, r_loss))
+            print("Prediction loss: {}, reward loss: {}, observation loss: {}".format(pred_loss, r_loss, obs_loss))
         writer.add_scalar("Loss/{}_sample_{}_nz".format(num_samples, nz), loss, epoch)
     writer.flush()
 
     z_list = minimize_AIS(D_pre_model, nu, nz, bt_, bp_, action_indices, tau=1)
     D_pre_model.cpu()
-    save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model)
+    save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model, P_o_za_model)
 
 
