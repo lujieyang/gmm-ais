@@ -173,6 +173,13 @@ def minimize_B(z_list, B, nz):
     return B #/B_sum
 
 
+def B_det_to_prob(B_det, nu, no):
+    B = []
+    for i in range(nu):
+        B.append(np.sum(B_det[i*no:(i+1)*no, :, :], axis=0))
+    return np.array(B)
+
+
 def validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt, bp, b_next, reward, action_indices, tau=1):
     # Validation Loss
     pred_loss = 0
@@ -192,12 +199,16 @@ def validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt, bp, b_next, reward, a
 if __name__ == '__main__':
     nz = 1000
     nu = 3
+    no = 4
     nf = 96
     ncBelief = 10
     tau = 1
+    AP2ab = True
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
-    B, r, D, z_list = load_model(nz, nf, nu, tau)
+    B, r, D, z_list = load_model(nz, nf, nu, tau, AP2ab=AP2ab)
 
+    if AP2ab:
+        B = B_det_to_prob(B, nu, no)
     num_samples = 5000
     BO, BS, s, a, o, reward, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                                       P["stepsXtrial"], P["rMin"], P["rMax"])

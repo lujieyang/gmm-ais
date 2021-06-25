@@ -36,7 +36,7 @@ def cal_loss(B_model, r_model, D_pre_model, loss_fn_z, loss_fn_r, nu, no, bt, bp
         r_loss += l*loss_fn_r(r_pred, r[ind])
         if P_o_za_model is not None:
             obs_pred = P_o_za_model[i](Db)
-            obs_loss += loss_fn_r(obs_pred, P_o_ba[ind])
+            obs_loss += l * loss_fn_r(obs_pred, P_o_ba[ind])
     if B_det_model is not None:
         for i in range(nu * no):
             ind = (action_obs_ind == i)
@@ -125,15 +125,19 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba):
 
 
 def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model=None, P_o_za_model=None):
-    folder_name = "model/" + "100k/"
+    folder_name = "model/" + "10k/"
     r_dict = {}
     if B_det_model is not None:
-        folder_name += "AP2ab/"
+        folder_name += "AP2ab/" + "obs_l_weight_2/"
         B_det = []
         for i in range(len(B_det_model)):
             B_det_model[i].cpu()
             B_det.append(B_det_model[i].weight.data.numpy())
         np.save(folder_name + "B_det_{}_{}_{}".format(nz, nf, tau), B_det)
+        for j in range(len(r_dict)):
+            r_model[j].cpu()
+            r_dict[str(j)] = r_model[j].state_dict()
+            r_dict["model_" + str(j)] = r_model[j]
     else:
         B = []
         for i in range(len(B_model)):
@@ -156,9 +160,12 @@ def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model=N
     torch.save(D_pre_model, folder_name + "D_pre_{}_{}_{}_model.pth".format(nz, nf, tau))
 
 
-def load_model(nz, nf, nu, tau):
-    folder_name = "model/" + "100k/" + "6_layer/" + "scheduler/"
-    B = np.load(folder_name + "B_{}_{}_{}.npy".format(nz, nf, tau))
+def load_model(nz, nf, nu, tau, AP2ab=False):
+    folder_name = "model/" + "10k/" + "AP2ab/obs_l_weight/" #"6_layer/" + "scheduler/"
+    if AP2ab:
+        B = np.load(folder_name + "B_det_{}_{}_{}.npy".format(nz, nf, tau))
+    else:
+        B = np.load(folder_name + "B_{}_{}_{}.npy".format(nz, nf, tau))
     z_list = np.load(folder_name + "zList_{}_{}_{}.npy".format(nz, nf, tau))
     # z_list = np.arange(nz)
     r_dict = torch.load(folder_name + "r_{}_{}_{}.pth".format(nz, nf, tau))
@@ -185,13 +192,14 @@ if __name__ == '__main__':
     # Sample belief states data
     ncBelief = 10  #5
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
-    num_samples = 100000
+    num_samples = 10000#0
     BO, BS, s, a, o, r, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                                       P["stepsXtrial"], P["rMin"], P["rMax"])
     nz = 1000
     nu = 3
     no = 4
     tau = args.tau
+    AP2ab = False
 
     bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward, P_o_ba_t = \
         process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba)
@@ -225,6 +233,7 @@ if __name__ == '__main__':
     D_pre_model.to(device)
     B_det_model = None
     if args.det_trans:
+        AP2ab = True
         B_det_model = []
         for i in range(nu * no):
             B_det_model.append(nn.Linear(nz, nz, bias=False).to(device))
@@ -237,7 +246,10 @@ if __name__ == '__main__':
         project_col_sum(P_o_za_model)
 
     if args.resume_training:
-        B, r_model, D_pre_model, z_list = load_model(nz, nf, nu, tau)
+        B, r_model, D_pre_model, z_list = load_model(nz, nf, nu, tau, AP2ab=AP2ab)
+        D_pre_model.to(device)
+        for i in range(len(r_model)):
+            r_model[i].to(device)
 
     params = list(D_pre_model.parameters())
     if B_det_model is None:
@@ -257,7 +269,7 @@ if __name__ == '__main__':
     if args.scheduler:
         scheduler = StepLR(optimizer, step_size=10000, gamma=0.1)
 
-    num_epoch = 100000
+    num_epoch = 60000
 
     # Shuffle data: change to DataLoader
     ind = np.arange(st.shape[0])
