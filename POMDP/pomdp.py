@@ -31,7 +31,7 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
         self.A = A
         self.O = O
 
-    def SampleBeliefs(self, start, nBeliefs, minBeliefDist, stepsXtrial, minR, maxR):
+    def SampleBeliefs(self, start, nBeliefs, minBeliefDist, stepsXtrial, minR, maxR, obs_prob=False):
         np.random.seed(8888)
         A = self.A
         S = self.S
@@ -54,7 +54,8 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
                 step_ind.append(k)
 
             a = A.rand()
-            s, b, o, r, bn, P_o_ba = self.SimulationStep(b, s, a, True)
+
+            s, b, o, r, bn, P_o_ba = self.SimulationStep(b, s, a, obs_prob=obs_prob)
 
             if (k > 1) and (minBeliefDist > 0):
                 md = b.Distance(BO[k-1])
@@ -89,9 +90,9 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
 
         if obs_prob:
             P_o_ba = self.get_observation_conditional_prob(bn, S)
-            return s, b, o, r, bn, P_o_ba
         else:
-            return s, b, o, r
+            P_o_ba = 0
+        return s, b, o, r, bn, P_o_ba
 
     def get_observation_conditional_prob(self, b, Sp):
         no = len(self.p)
