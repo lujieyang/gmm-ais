@@ -65,7 +65,7 @@ def GetTest1Parameters(ncBelief=4, ncAlpha=9, actionScale=2):
     rm = []
     rm.append(GMixture(np.array([-2, -2, -2]), [Gaussian(-21, 1), Gaussian(-19, 1), Gaussian(-17, 1)]))
     rm.append(GMixture(np.array([-2, -2, -2]), [Gaussian(21, 1), Gaussian(19, 1), Gaussian(17, 1)]))
-    rm.append(GMixture(np.array([-10, 2, -10]), [Gaussian(-25, 250), Gaussian(3, 3), Gaussian(25, 250)]))
+    rm.append(GMixture(np.array([-4, 6, -4]), [Gaussian(-25, 250), Gaussian(3, 3), Gaussian(25, 250)]))
     RM = CS_DA_RewardModel(S, A, rm)
 
     # Assemble the POMDP
