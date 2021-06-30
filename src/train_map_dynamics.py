@@ -125,7 +125,7 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba):
 
 
 def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model=None, P_o_za_model=None):
-    folder_name = "model_2/" + "100k/"
+    folder_name = "model/" + "100k/"
     r_dict = {}
     if B_det_model is not None:
         folder_name += "AP2ab/" + "obs_l_weight_2/"
@@ -134,7 +134,7 @@ def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model=N
             B_det_model[i].cpu()
             B_det.append(B_det_model[i].weight.data.numpy())
         np.save(folder_name + "B_det_{}_{}_{}".format(nz, nf, tau), B_det)
-        for j in range(len(r_dict)):
+        for j in range(len(r_model)):
             r_model[j].cpu()
             r_dict[str(j)] = r_model[j].state_dict()
             r_dict["model_" + str(j)] = r_model[j]
@@ -161,7 +161,7 @@ def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model=N
 
 
 def load_model(nz, nf, nu, tau, AP2ab=False):
-    folder_name = "model/" + "100k/" #+ "6_layer/" + "scheduler/"
+    folder_name = "model/" + "100k/" + "6_layer/" #+ "scheduler/"
     if AP2ab:
         B = np.load(folder_name + "B_det_{}_{}_{}.npy".format(nz, nf, tau))
     else:
