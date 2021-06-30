@@ -1,0 +1,39 @@
+model/100k/6_layer/D_pre_1000_96_1
+
+ncBelief = 10, nz = 1000, nf = 96, tau = 1
+D_pre_model = nn.Sequential(
+        nn.Linear(input_dim, nf), nn.LeakyReLU(0.1),
+        nn.Linear(nf, 2 * nf), nn.LeakyReLU(0.1),
+        nn.Linear(2 * nf, 4 * nf), nn.LeakyReLU(0.1),
+        nn.Linear(4 * nf, 2 * nf), nn.LeakyReLU(0.1),
+        nn.Linear(nf * 2, nf), nn.LeakyReLU(0.1),
+        nn.Linear(nf, nz))
+Minimized number of AIS: 69
+Average return: ~65
+
+model/100k/6_layer/scheduler/D_pre_1000_96_1
+
+ncBelief = 10, nz = 1000, nf = 96, tau = 1, stepRL scheduler
+D_pre_model = nn.Sequential(
+        nn.Linear(input_dim, nf), nn.LeakyReLU(0.1),
+        nn.Linear(nf, 2 * nf), nn.LeakyReLU(0.1),
+        nn.Linear(2 * nf, 4 * nf), nn.LeakyReLU(0.1),
+        nn.Linear(4 * nf, 2 * nf), nn.LeakyReLU(0.1),
+        nn.Linear(nf * 2, nf), nn.LeakyReLU(0.1),
+        nn.Linear(nf, nz))
+Minimized number of AIS:
+Average return: ~69.59
+
+model/100k/scheduler/D_pre_1000_96_1
+
+ncBelief = 10, nz = 1000, nf = 96, tau = 1
+D_pre_model = nn.Sequential(
+        nn.Linear(input_dim, nf), nn.LeakyReLU(0.1),
+        nn.Linear(nf, 2 * nf), nn.LeakyReLU(0.1),
+        nn.Linear(2 * nf, 4 * nf), nn.LeakyReLU(0.1),
+        nn.Linear(4 * nf, 2 * nf), nn.LeakyReLU(0.1),
+        nn.Linear(nf * 2, nf), nn.LeakyReLU(0.1),
+        nn.Linear(nf, nz))
+Minimized number of AIS: 69
+Average return: ~70
+

@@ -215,7 +215,7 @@ if __name__ == '__main__':
     dict = interpret(BO, s, a, o, reward, D, r, tau=tau)
     # B = minimize_B(dict.keys(), B, nz)
     B = minimize_B(z_list, B, nz)
-    # print("Minimized number of AIS: ", len(dict.keys()))
+    print("Minimized number of AIS: ", len(z_list))
 
     bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward_values, P_o_ba_t = \
         process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, reward, P_o_ba)

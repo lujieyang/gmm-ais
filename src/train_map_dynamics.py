@@ -134,7 +134,7 @@ def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model=N
             B_det_model[i].cpu()
             B_det.append(B_det_model[i].weight.data.numpy())
         np.save(folder_name + "B_det_{}_{}_{}".format(nz, nf, tau), B_det)
-        for j in range(len(r_dict)):
+        for j in range(len(r_model)):
             r_model[j].cpu()
             r_dict[str(j)] = r_model[j].state_dict()
             r_dict["model_" + str(j)] = r_model[j]
