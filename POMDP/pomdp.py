@@ -53,7 +53,8 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
                 s = S.Crop(b.rand())
                 step_ind.append(k)
 
-            a = A.rand()
+            # a = A.rand()
+            a = A.hard_negative()
 
             s, b, o, r, bn, P_o_ba = self.SimulationStep(b, s, a, obs_prob=obs_prob)
 

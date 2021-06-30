@@ -7,3 +7,6 @@ class DSpace:
 
     def rand(self):
         return np.ceil(np.random.rand()*self.max)
+
+    def hard_negative(self):
+        return np.where(np.random.multinomial(1, [0.25, 0.25, 0.5]) == 1)[0][0] + 1
