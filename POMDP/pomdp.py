@@ -37,7 +37,9 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
         S = self.S
 
         md = minBeliefDist + 1
+        # Belief before observation correction
         B = []
+        # Belief after conditioning on observations
         BO = []
         s_s = []
         a_s = []

@@ -6,6 +6,8 @@ from torch.nn import functional as F
 import torch.nn as nn
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.tensorboard import SummaryWriter
+from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data.dataloader import default_collate
 from Experiments.GetTestParameters import GetTest1Parameters
 
 
@@ -17,26 +19,28 @@ def action_obs_1d_ind(nu, no, actions, obs):
     return ind
 
 
-def cal_loss(B_model, r_model, D_pre_model, loss_fn_z, loss_fn_r, nu, no, bt, bp, b_next, actions, action_obs_ind, r,
-             l=1, tau=1, B_det_model=None, P_o_za_model=None, P_o_ba=None):
+def cal_loss(B_model, r_model, D_pre_model, loss_fn_z, loss_fn_r, nu, no, data,
+             l=1, tau=1, B_det_model=None, P_o_za_model=None):
+    bt, bp, b_next, r, P_o_ba, action_ind, action_obs_ind = data
     pred_loss = 0
     r_loss = 0
     obs_loss = 0
     for i in range(nu):
         # Calculate loss for each (discrete) action
-        ind = (actions == i)
-        Db = F.gumbel_softmax(D_pre_model(bt[ind]), tau=tau, hard=True)
-        if B_det_model is None:
-            z = B_model[i](Db)
-            z_next = F.gumbel_softmax(D_pre_model(bp[ind]), tau=tau, hard=True)
-            # Obtain class for cross entropy loss
-            # _, z_next_class = z_next.max(dim=1)
-            pred_loss += loss_fn_z(z, z_next)
-        r_pred = r_model[i](Db)
-        r_loss += l*loss_fn_r(r_pred, r[ind])
-        if P_o_za_model is not None:
-            obs_pred = P_o_za_model[i](Db)
-            obs_loss += l * loss_fn_r(obs_pred, P_o_ba[ind])
+        ind = (action_ind == i)
+        if len(bt[ind]) > 0:
+            Db = F.gumbel_softmax(D_pre_model(bt[ind]), tau=tau, hard=True)
+            if B_det_model is None:
+                z = B_model[i](Db)
+                z_next = F.gumbel_softmax(D_pre_model(bp[ind]), tau=tau, hard=True)
+                # Obtain class for cross entropy loss
+                # _, z_next_class = z_next.max(dim=1)
+                pred_loss += loss_fn_z(z, z_next)
+            r_pred = r_model[i](Db)
+            r_loss += l*loss_fn_r(r_pred, r[ind])
+            if P_o_za_model is not None:
+                obs_pred = P_o_za_model[i](Db)
+                obs_loss += l * loss_fn_r(obs_pred, P_o_ba[ind])
     if B_det_model is not None:
         for i in range(nu * no):
             ind = (action_obs_ind == i)
@@ -48,11 +52,40 @@ def cal_loss(B_model, r_model, D_pre_model, loss_fn_z, loss_fn_r, nu, no, bt, bp
     return pred_loss, r_loss, obs_loss
 
 
-def minimize_AIS(D_pre_model, nu, nz, bt, bp, actions, tau=1):
+def hard_negative_sample(B_model, r_model, D_pre_model, z_dist, r_dist, nu, no, mining_loader, mining_ratio, batch_size,
+                         l=10, tau=1, B_det_model=None, P_o_za_model=None):
+    for i, data in enumerate(mining_loader, 0):
+        bt, bp, b_next, r, P_o_ba, action_ind, action_obs_ind = data
+    index = []
+    loss = []
+    for i in range(nu):
+        # Calculate loss for each (discrete) action
+        ind = np.where(action_ind == i)[0]
+        index += list(ind)
+        Db = F.gumbel_softmax(D_pre_model(bt[ind]), tau=tau, hard=True)
+        if B_det_model is None:
+            z = B_model[i](Db)
+            z_next = F.gumbel_softmax(D_pre_model(bp[ind]), tau=tau, hard=True)
+            pred_loss = z_dist(z, z_next)
+        r_pred = r_model[i](Db)
+        r_loss = r_dist(r_pred, r[ind])
+        loss += pred_loss + l*r_loss
+    index = torch.tensor(index)
+    loss = torch.tensor(loss)
+    sort_ind = torch.argsort(loss, descending=True)
+    pick_ind = index[sort_ind[:int(np.ceil(mining_ratio*len(loss)))]]
+    data_set = TensorDataset(bt[pick_ind], bp[pick_ind], b_next[pick_ind], r[pick_ind], P_o_ba[pick_ind],
+                             action_ind[pick_ind], action_obs_ind[pick_ind])
+    return DataLoader(data_set, batch_size=batch_size)
+
+
+
+
+def minimize_AIS(D_pre_model, nu, nz, bt, bp, action_ind, tau=1):
     z_list = np.zeros(nz)
     for i in range(nu):
         # Calculate loss for each (discrete) action
-        ind = (actions == i)
+        ind = (action_ind == i)
         Db = F.gumbel_softmax(D_pre_model(bt[ind]), tau=tau, hard=True).cpu().detach().numpy()
         z_next = F.gumbel_softmax(D_pre_model(bp[ind]), tau=tau, hard=True).cpu().detach().numpy()
         z_list += np.sum(Db+z_next, axis=0)
@@ -92,10 +125,10 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba):
     b_next_p = []
     st = []
     s_next = []
-    action_indices = []
-    observation_indices = []
     reward = []
     P_o_ba_t = []
+    action_indices = []
+    observation_indices = []
     if g_dim == 1:
         for i in range(num_samples):
             b = BO[i].to_array()
@@ -120,15 +153,16 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba):
     else:
         pass
 
-    return np.array(bt[:-1]), np.array(b_next), np.array(b_next_p), np.array(st[:-1]), np.array(s_next), input_dim, \
-           g_dim, action_indices[:-1], observation_indices[:-1], np.array(reward[:-1]), np.array(P_o_ba_t[:-1])
+    return np.array(bt[:-1]), np.array(b_next), np.array(b_next_p), np.array(st[:-1]), np.array(s_next), \
+           np.array(reward[:-1]), np.array(P_o_ba_t[:-1]),action_indices[:-1], observation_indices[:-1],\
+           input_dim, g_dim,
 
 
 def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model=None, P_o_za_model=None):
     folder_name = "model/" + "100k/"
     r_dict = {}
     if B_det_model is not None:
-        folder_name += "AP2ab/" + "obs_l_weight_2/"
+        folder_name += "AP2ab/" + "obs_l_weight/"
         B_det = []
         for i in range(len(B_det_model)):
             B_det_model[i].cpu()
@@ -185,6 +219,10 @@ if __name__ == '__main__':
     parser.add_argument("--det_trans", help="Fit the deterministic transition of AIS (AP2a)", action="store_true")
     parser.add_argument("--pred_obs", help="Predict the observation (AP2b)", action="store_true")
     parser.add_argument("--tau", help="Temperature for Gumbel Softmax", type=float, default=1)
+    parser.add_argument("--mining_step", help="Steps to remove easy samples and add hard negatives", type=int,
+                        default=1000)
+    parser.add_argument("--mining_ratio", help="Number of hard negative samples for training", type=float, default=0.1)
+    parser.add_argument("--batch_size", help="Training batch size", type=int, default=50)
     parser.add_argument("--resume_training", help="Resume training for the model", action="store_true")
     parser.add_argument("--scheduler", help="Set StepLR scheduler", action="store_true")
     args = parser.parse_args()
@@ -201,9 +239,9 @@ if __name__ == '__main__':
     tau = args.tau
     AP2ab = False
 
-    bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward, P_o_ba_t = \
+    bt, b_next, bp, st, s_next, reward, P_o_ba_t, action_ind, observation_ind, input_dim, g_dim = \
         process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba)
-    action_obs_ind = action_obs_1d_ind(nu, no, action_indices, observation_indices)
+    action_obs_ind = action_obs_1d_ind(nu, no, action_ind, observation_ind)
 
     # "End-to-end" training to minimize AP12
     writer = SummaryWriter()
@@ -230,6 +268,8 @@ if __name__ == '__main__':
             nn.Linear(nf, nz))
     loss_fn_z = nn.L1Loss()  # CrossEntropyLoss()
     loss_fn_r = nn.MSELoss()
+    z_dist = nn.PairwiseDistance(p=1)
+    r_dist = nn.PairwiseDistance(p=2)
     D_pre_model.to(device)
     B_det_model = None
     if args.det_trans:
@@ -272,41 +312,50 @@ if __name__ == '__main__':
     num_epoch = 60000
 
     # Shuffle data: change to DataLoader
-    ind = np.arange(st.shape[0])
-    np.random.shuffle(ind)
-    st_ = torch.from_numpy(st[ind]).view(st.shape[0], 1).to(torch.float32).to(device)
-    s_next_ = torch.from_numpy(s_next[ind]).view(s_next.shape[0], 1).to(torch.float32).to(device)
-    bt_ = torch.from_numpy(bt[ind]).to(torch.float32).to(device)
-    bp_ = torch.from_numpy(bp[ind]).to(torch.float32).to(device)
-    b_next_ = torch.from_numpy(b_next[ind]).to(torch.float32).to(device)
-    r_ = torch.from_numpy(reward[ind]).view(st.shape[0], 1).to(torch.float32).to(device)
-    P_o_ba_t_ = torch.from_numpy(P_o_ba_t[ind]).to(torch.float32).to(device)
-    action_indices = np.array(action_indices)[ind]
-    action_obs_ind = np.array(action_obs_ind)[ind]
+    st_ = torch.from_numpy(st).view(st.shape[0], 1).to(torch.float32).to(device)
+    s_next_ = torch.from_numpy(s_next).view(s_next.shape[0], 1).to(torch.float32).to(device)
+    bt_ = torch.from_numpy(bt).to(torch.float32).to(device)
+    bp_ = torch.from_numpy(bp).to(torch.float32).to(device)
+    b_next_ = torch.from_numpy(b_next).to(torch.float32).to(device)
+    r_ = torch.from_numpy(reward).view(reward.shape[0], 1).to(torch.float32).to(device)
+    P_o_ba_t_ = torch.from_numpy(P_o_ba_t).to(torch.float32).to(device)
+    action_ind = torch.tensor(action_ind).to(device)
+    action_obs_ind = torch.tensor(action_obs_ind).to(device)
+
+    train_set = TensorDataset(bt_, bp_, b_next_, r_, P_o_ba_t_, action_ind, action_obs_ind)
+    mining_loader = DataLoader(train_set, batch_size=num_samples, shuffle=True)
+    data_loader = hard_negative_sample(B_model, r_model, D_pre_model, z_dist, r_dist, nu, no, mining_loader,
+                                       args.mining_ratio, args.batch_size, l=10, tau=tau, B_det_model=B_det_model,
+                                       P_o_za_model=P_o_za_model)
 
     for epoch in range(num_epoch):
-        optimizer.zero_grad()
-        pred_loss, r_loss, obs_loss = cal_loss(B_model, r_model, D_pre_model, loss_fn_z, loss_fn_r, nu, no, bt_, bp_,
-                                               b_next_, action_indices, action_obs_ind, r_, l=10, tau=tau,
-                                               B_det_model=B_det_model, P_o_za_model=P_o_za_model, P_o_ba=P_o_ba_t_)
-        loss = pred_loss + r_loss + obs_loss
-        loss.backward()
-        optimizer.step()
+        for i, data in enumerate(data_loader, 0):
+            optimizer.zero_grad()
+            pred_loss, r_loss, obs_loss = cal_loss(B_model, r_model, D_pre_model, loss_fn_z, loss_fn_r, nu, no, data,
+                                                   l=10, tau=tau, B_det_model=B_det_model, P_o_za_model=P_o_za_model)
+            loss = pred_loss + r_loss + obs_loss
+            loss.backward()
+            optimizer.step()
+            # Projected Gradient Descent to ensure column sum of B = 1
+            project_col_sum(B_model)
+            if B_det_model is not None:
+                project_col_sum(B_det_model)
+            if P_o_za_model is not None:
+                project_col_sum(P_o_za_model)
+
         if scheduler is not None:
             scheduler.step()
-        # Projected Gradient Descent to ensure column sum of B = 1
-        project_col_sum(B_model)
-        if B_det_model is not None:
-            project_col_sum(B_det_model)
-        if P_o_za_model is not None:
-            project_col_sum(P_o_za_model)
+        if epoch % args.mining_step == 0:
+            data_loader = hard_negative_sample(B_model, r_model, D_pre_model, z_dist, r_dist, nu, no, mining_loader,
+                                               args.mining_ratio, args.batch_size, l=10, tau=tau, B_det_model=B_det_model,
+                                               P_o_za_model=P_o_za_model)
         if epoch % 100 == 0:
             print(epoch)
             print("Prediction loss: {}, reward loss: {}, observation loss: {}".format(pred_loss, r_loss, obs_loss))
         writer.add_scalar("Loss/{}_sample_{}_nz".format(num_samples, nz), loss, epoch)
     writer.flush()
 
-    z_list = minimize_AIS(D_pre_model, nu, nz, bt_, bp_, action_indices, tau=1)
+    z_list = minimize_AIS(D_pre_model, nu, nz, bt_, bp_, action_ind, tau=1)
     D_pre_model.cpu()
     save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model, P_o_za_model)
 
