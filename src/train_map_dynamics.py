@@ -7,7 +7,6 @@ import torch.nn as nn
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import TensorDataset, DataLoader
-from torch.utils.data.dataloader import default_collate
 from Experiments.GetTestParameters import GetTest1Parameters
 
 
@@ -57,10 +56,10 @@ def hard_negative_sample(B_model, r_model, D_pre_model, z_dist, r_dist, nu, no, 
     for i, data in enumerate(mining_loader, 0):
         bt, bp, b_next, r, P_o_ba, action_ind, action_obs_ind = data
     index = []
-    loss = []
+    loss = torch.tensor([]).to(device)
     for i in range(nu):
         # Calculate loss for each (discrete) action
-        ind = np.where(action_ind == i)[0]
+        ind = np.where(action_ind.cpu() == i)[0]
         index += list(ind)
         Db = F.gumbel_softmax(D_pre_model(bt[ind]), tau=tau, hard=True)
         if B_det_model is None:
@@ -69,16 +68,13 @@ def hard_negative_sample(B_model, r_model, D_pre_model, z_dist, r_dist, nu, no, 
             pred_loss = z_dist(z, z_next)
         r_pred = r_model[i](Db)
         r_loss = r_dist(r_pred, r[ind])
-        loss += pred_loss + l*r_loss
+        loss = torch.cat((loss, pred_loss + l*r_loss))
     index = torch.tensor(index)
-    loss = torch.tensor(loss)
     sort_ind = torch.argsort(loss, descending=True)
-    pick_ind = index[sort_ind[:int(np.ceil(mining_ratio*len(loss)))]]
+    pick_ind = index[sort_ind][:int(np.ceil(mining_ratio*len(loss)))]
     data_set = TensorDataset(bt[pick_ind], bp[pick_ind], b_next[pick_ind], r[pick_ind], P_o_ba[pick_ind],
                              action_ind[pick_ind], action_obs_ind[pick_ind])
     return DataLoader(data_set, batch_size=batch_size)
-
-
 
 
 def minimize_AIS(D_pre_model, nu, nz, bt, bp, action_ind, tau=1):
@@ -154,12 +150,23 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba):
         pass
 
     return np.array(bt[:-1]), np.array(b_next), np.array(b_next_p), np.array(st[:-1]), np.array(s_next), \
-           np.array(reward[:-1]), np.array(P_o_ba_t[:-1]),action_indices[:-1], observation_indices[:-1],\
+           np.array(reward[:-1]), np.array(P_o_ba_t[:-1]), action_indices[:-1], observation_indices[:-1],\
            input_dim, g_dim,
 
 
+def save_data(input_dim, mining_loader):
+    folder_name = "data/"
+    save_dict = {"input_dim": input_dim, "mining_loader": mining_loader}
+    torch.save(save_dict, folder_name + "mining_loader_data.pth")
+
+
+def load_data(file_name="data/mining_loader_data.pth"):
+    load_dict = torch.load(file_name)
+    return load_dict["input_dim"], load_dict["mining_loader"]
+
+
 def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model=None, P_o_za_model=None):
-    folder_name = "model/" + "100k/"
+    folder_name = "model/" + "100k/" + "7_layer/"
     r_dict = {}
     if B_det_model is not None:
         folder_name += "AP2ab/" + "obs_l_weight/"
@@ -201,7 +208,6 @@ def load_model(nz, nf, nu, tau, AP2ab=False):
     else:
         B = np.load(folder_name + "B_{}_{}_{}.npy".format(nz, nf, tau))
     z_list = np.load(folder_name + "zList_{}_{}_{}.npy".format(nz, nf, tau))
-    # z_list = np.arange(nz)
     r_dict = torch.load(folder_name + "r_{}_{}_{}.pth".format(nz, nf, tau))
     r = []
     for i in range(nu):
@@ -218,11 +224,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--det_trans", help="Fit the deterministic transition of AIS (AP2a)", action="store_true")
     parser.add_argument("--pred_obs", help="Predict the observation (AP2b)", action="store_true")
+    parser.add_argument("--generate_data", help="Generate belief samples", action="store_true")
     parser.add_argument("--tau", help="Temperature for Gumbel Softmax", type=float, default=1)
     parser.add_argument("--mining_step", help="Steps to remove easy samples and add hard negatives", type=int,
-                        default=1000)
-    parser.add_argument("--mining_ratio", help="Number of hard negative samples for training", type=float, default=0.1)
-    parser.add_argument("--batch_size", help="Training batch size", type=int, default=50)
+                        default=500)
+    parser.add_argument("--mining_ratio", help="Number of hard negative samples for training", type=float, default=0.5)
+    parser.add_argument("--batch_size", help="Training batch size", type=int, default=1000)
     parser.add_argument("--resume_training", help="Resume training for the model", action="store_true")
     parser.add_argument("--scheduler", help="Set StepLR scheduler", action="store_true")
     args = parser.parse_args()
@@ -231,17 +238,10 @@ if __name__ == '__main__':
     ncBelief = 10  #5
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
     num_samples = 100000
-    BO, BS, s, a, o, r, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
-                                                      P["stepsXtrial"], P["rMin"], P["rMax"], obs_prob=args.pred_obs)
     nz = 1000
     nu = 3
     no = 4
     tau = args.tau
-    AP2ab = False
-
-    bt, b_next, bp, st, s_next, reward, P_o_ba_t, action_ind, observation_ind, input_dim, g_dim = \
-        process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba)
-    action_obs_ind = action_obs_1d_ind(nu, no, action_ind, observation_ind)
 
     # "End-to-end" training to minimize AP12
     writer = SummaryWriter()
@@ -249,6 +249,32 @@ if __name__ == '__main__':
         device = torch.device("cuda")
     else:
         device = torch.device("cpu")
+
+    if args.generate_data:
+        BO, BS, s, a, o, r, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
+                                                                   P["stepsXtrial"], P["rMin"], P["rMax"],
+                                                                   obs_prob=args.pred_obs)
+        bt, b_next, bp, st, s_next, reward, P_o_ba_t, action_ind, observation_ind, input_dim, g_dim = \
+            process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba)
+        action_obs_ind = action_obs_1d_ind(nu, no, action_ind, observation_ind)
+
+        st_ = torch.from_numpy(st).view(st.shape[0], 1).to(torch.float32).to(device)
+        s_next_ = torch.from_numpy(s_next).view(s_next.shape[0], 1).to(torch.float32).to(device)
+        bt_ = torch.from_numpy(bt).to(torch.float32).to(device)
+        bp_ = torch.from_numpy(bp).to(torch.float32).to(device)
+        b_next_ = torch.from_numpy(b_next).to(torch.float32).to(device)
+        r_ = torch.from_numpy(reward).view(reward.shape[0], 1).to(torch.float32).to(device)
+        P_o_ba_t_ = torch.from_numpy(P_o_ba_t).to(torch.float32).to(device)
+        action_ind = torch.tensor(action_ind).to(device)
+        action_obs_ind = torch.tensor(action_obs_ind).to(device)
+
+        train_set = TensorDataset(bt_, bp_, b_next_, r_, P_o_ba_t_, action_ind, action_obs_ind)
+        mining_loader = DataLoader(train_set, batch_size=num_samples, shuffle=True)
+        save_data(input_dim, mining_loader)
+    else:
+        input_dim, mining_loader = load_data()
+        for i, mining_data in enumerate(mining_loader, 0):
+            bt_, bp_, _, r_, _, action_ind, _ = mining_data
 
     nf = 96
     B_model = []
@@ -263,6 +289,7 @@ if __name__ == '__main__':
             nn.Linear(input_dim, nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
             nn.Linear(nf, 2 * nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
             nn.Linear(2 * nf, 4 * nf), nn.LeakyReLU(0.1),
+            nn.Linear(4 * nf, 4 * nf), nn.LeakyReLU(0.1),
             nn.Linear(4 * nf, 2 * nf), nn.LeakyReLU(0.1),
             nn.Linear(nf * 2, nf), nn.LeakyReLU(0.1),
             nn.Linear(nf, nz))
@@ -286,7 +313,7 @@ if __name__ == '__main__':
         project_col_sum(P_o_za_model)
 
     if args.resume_training:
-        B, r_model, D_pre_model, z_list = load_model(nz, nf, nu, tau, AP2ab=AP2ab)
+        B, r_model, D_pre_model, z_list = load_model(nz, nf, nu, tau, AP2ab=args.det_trans)
         D_pre_model.to(device)
         for i in range(len(r_model)):
             r_model[i].to(device)
@@ -309,21 +336,8 @@ if __name__ == '__main__':
     if args.scheduler:
         scheduler = StepLR(optimizer, step_size=10000, gamma=0.1)
 
-    num_epoch = 60000
+    num_epoch = 20000
 
-    # Shuffle data: change to DataLoader
-    st_ = torch.from_numpy(st).view(st.shape[0], 1).to(torch.float32).to(device)
-    s_next_ = torch.from_numpy(s_next).view(s_next.shape[0], 1).to(torch.float32).to(device)
-    bt_ = torch.from_numpy(bt).to(torch.float32).to(device)
-    bp_ = torch.from_numpy(bp).to(torch.float32).to(device)
-    b_next_ = torch.from_numpy(b_next).to(torch.float32).to(device)
-    r_ = torch.from_numpy(reward).view(reward.shape[0], 1).to(torch.float32).to(device)
-    P_o_ba_t_ = torch.from_numpy(P_o_ba_t).to(torch.float32).to(device)
-    action_ind = torch.tensor(action_ind).to(device)
-    action_obs_ind = torch.tensor(action_obs_ind).to(device)
-
-    train_set = TensorDataset(bt_, bp_, b_next_, r_, P_o_ba_t_, action_ind, action_obs_ind)
-    mining_loader = DataLoader(train_set, batch_size=num_samples, shuffle=True)
     data_loader = hard_negative_sample(B_model, r_model, D_pre_model, z_dist, r_dist, nu, no, mining_loader,
                                        args.mining_ratio, args.batch_size, l=10, tau=tau, B_det_model=B_det_model,
                                        P_o_za_model=P_o_za_model)
@@ -355,7 +369,7 @@ if __name__ == '__main__':
         writer.add_scalar("Loss/{}_sample_{}_nz".format(num_samples, nz), loss, epoch)
     writer.flush()
 
-    z_list = minimize_AIS(D_pre_model, nu, nz, bt_, bp_, action_ind, tau=1)
+    z_list = minimize_AIS(D_pre_model, nu, nz, bt_, bp_, action_ind, tau=tau)
     D_pre_model.cpu()
     save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model, P_o_za_model)
 

@@ -217,7 +217,7 @@ if __name__ == '__main__':
     B = minimize_B(z_list, B, nz)
     print("Minimized number of AIS: ", len(z_list))
 
-    bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward_values, P_o_ba_t = \
+    bt, b_next, bp, st, s_next, reward_values, P_o_ba_t, action_ind, observation_ind, input_dim, g_dim = \
         process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, reward, P_o_ba)
     st_ = torch.from_numpy(st).view(st.shape[0], 1).to(torch.float32)
     s_next_ = torch.from_numpy(s_next).view(bt.shape[0], 1).to(torch.float32)
@@ -227,7 +227,7 @@ if __name__ == '__main__':
     r_ = torch.from_numpy(reward_values).view(st.shape[0], 1).to(torch.float32)
     loss_fn_z = nn.L1Loss()
     loss_fn_r = nn.MSELoss()
-    validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt_, bp_, b_next_, r_, action_indices, tau=tau)
+    validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt_, bp_, b_next_, r_, action_ind, tau=tau)
 
     policy, V = value_iteration(B, r, nz, nu, z_list) #dict.keys())
     aR = []
