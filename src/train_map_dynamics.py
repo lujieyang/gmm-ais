@@ -160,7 +160,7 @@ def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model=N
 
 
 def load_model(nz, nf, nu, tau, AP2ab=False):
-    folder_name = "model/" + "10k/" #+ "6_layer/" + "scheduler/"
+    folder_name = "model/" + "10k/" + "6_layer/" #+ "scheduler/"
     if AP2ab:
         B = np.load(folder_name + "B_det_{}_{}_{}.npy".format(nz, nf, tau))
     else:

@@ -87,6 +87,19 @@ class GMixture:
 
         return GMixture(w, g)
 
+    def ProductInt(self, gm2):
+        """ Product and marginalization of two GMixtures. """
+        c = 0
+        for i in range(self.n):
+            m1 = self.g[i].m
+            S1 = self.g[i].S
+            val = []
+            for x in gm2.g:
+                ig = Gaussian(x.m, S1+x.S)
+                val.append(ig.Value(m1))
+                c += self.w[i] * np.sum(gm2.w * np.array(val))
+            return c
+
     def Compress(self, m):
         """
         Gaussian mixture compression

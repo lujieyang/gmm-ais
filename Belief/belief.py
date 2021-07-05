@@ -22,6 +22,9 @@ class GBelief(Belief, GMixture):
         bo = po * self
         return GBelief(bo.Crop(Sp), self.maxC)
 
+    def Expectation(self, x):
+        return self.ProductInt(x)
+
     def to_array(self):
         g_dim = self.g[0].dim
         input_dim = self.maxC * (1 + g_dim + g_dim ** 2)  # w, mean, flatten(Sigma)
