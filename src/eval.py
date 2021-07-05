@@ -128,9 +128,12 @@ def eval_performance(policy, V, POMDP, start, D, na, tau=1, B_det=None, n_episod
     return average_return  # , V_mse/len(Vs)
 
 
-def interpret(BO, s, a, o, reward, D, r, tau=1):
+def interpret(BO, s, a, o, reward, D, r, nu, tau=1):
     num_samples = len(BO)
     dict = {}
+    d = {}
+    for j in range(nu):
+        d[j] = []
     for i in range(num_samples):
         b = BO[i]
         z = F.gumbel_softmax(D(torch.from_numpy(b.to_array()).to(torch.float32)), tau=tau, hard=True)
@@ -138,29 +141,29 @@ def interpret(BO, s, a, o, reward, D, r, tau=1):
         z_one_hot = z.data.numpy()
         z_cluster = np.where(z_one_hot == 1)[0][0]
         a_ind = int(a[i]-1)
-        if z_cluster in dict.keys():
-            dict[z_cluster]["s"].append(s[i])
-            dict[z_cluster]["a"].append(a_ind)
-            dict[z_cluster]["o"].append(o[i])
-            dict[z_cluster]["r"].append(reward[i])
-            dict[z_cluster]["b"].append(b)
-            dict[z_cluster]["r_pred"].append(r[int(a[i] - 1)](z).detach().numpy()[0])
-        else:
+        if z_cluster not in dict.keys():
             dict[z_cluster] = {}
-            dict[z_cluster]["s"] = [s[i]]
-            dict[z_cluster]["a"] = [a_ind]
-            dict[z_cluster]["o"] = [o[i]]
-            dict[z_cluster]["r"] = [reward[i]]
-            dict[z_cluster]["b"] = [b]
-            dict[z_cluster]["r_pred"] = [r[int(a[i]-1)](z).detach().numpy()[0]]
+            dict[z_cluster]["s"] = copy.deepcopy(d)
+            dict[z_cluster]["o"] = copy.deepcopy(d)
+            dict[z_cluster]["r"] = copy.deepcopy(d)
+            dict[z_cluster]["b"] = copy.deepcopy(d)
+            dict[z_cluster]["r_pred"] = copy.deepcopy(d)
+        dict[z_cluster]["s"][a_ind].append(s[i])
+        dict[z_cluster]["o"][a_ind].append(o[i])
+        dict[z_cluster]["r"][a_ind].append(reward[i])
+        dict[z_cluster]["b"][a_ind].append(b)
+        dict[z_cluster]["r_pred"][a_ind].append(r[int(a[i] - 1)](z).detach().numpy()[0])
 
     for c in dict.keys():
-        r_pred = np.array(dict[c]["r_pred"])
-        if (r_pred > 1).any():
-            plt.plot(dict[c]["s"], dict[c]["r"], 'rx')
-            plt.plot(dict[c]["s"], dict[c]["r_pred"], 'k.')
-            plt.title(str(c))
-            plt.show()
+        for j in range(nu):
+            r_pred = np.array(dict[c]["r_pred"][j])
+            if (r_pred > 1).any():
+                plt.plot(dict[c]["s"][j], dict[c]["r"][j], 'rx')
+                plt.plot(dict[c]["s"][j], dict[c]["r_pred"][j], 'k.')
+                plt.xlabel("s")
+                plt.ylabel("y")
+                plt.title("Reward Prediction with Action {} for AIS {}".format(j, c))
+                plt.show()
     return dict
 
 
@@ -196,6 +199,16 @@ def validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt, bp, b_next, reward, a
     print("Prediction loss: {}, reward loss: {}".format(pred_loss, r_loss))
 
 
+def plot_reward(dict, z_list, nu):
+    for i in range(nu):
+        for z in dict.keys():
+            l = len(dict[z]["r"][i])
+            plt.plot(z * np.ones(l), dict[z]["r"][i], "kx")
+            plt.plot(z * np.ones(l), dict[z]["r_pred"][i], "r.")
+        plt.title("Reward Prediction for Action {}".format(i))
+        plt.show()
+
+
 if __name__ == '__main__':
     nz = 1000
     nu = 3
@@ -212,8 +225,8 @@ if __name__ == '__main__':
     num_samples = 5000
     BO, BS, s, a, o, reward, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                                       P["stepsXtrial"], P["rMin"], P["rMax"])
-    dict = interpret(BO, s, a, o, reward, D, r, tau=tau)
-    # B = minimize_B(dict.keys(), B, nz)
+    dict = interpret(BO, s, a, o, reward, D, r, nu, tau=tau)
+    plot_reward(dict, z_list, nu)
     B = minimize_B(z_list, B, nz)
     print("Minimized number of AIS: ", len(z_list))
 
@@ -229,7 +242,7 @@ if __name__ == '__main__':
     loss_fn_r = nn.MSELoss()
     validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt_, bp_, b_next_, r_, action_indices, tau=tau)
 
-    policy, V = value_iteration(B, r, nz, nu, z_list) #dict.keys())
+    policy, V = value_iteration(B, r, nz, nu, z_list)
     aR = []
     for i in range(100):
         print("Trial ", i)
