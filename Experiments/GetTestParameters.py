@@ -103,9 +103,9 @@ def plot_model(gms, title):
 
 if __name__ == "__main__":
     test = "Test1"
-    POMDP, P = GetTest1Parameters(ncBelief=5)  # eval("Get"+test+"Parameters")
+    POMDP, P = GetTest1Parameters(ncBelief=10)
     plot_model(POMDP.p, "Observation Model")
     plot_model(POMDP.r, "Reward Model")
-    BO, B, s, a, o, r, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], P["nBeliefs"], P["dBelief"],
+    BO, B, s, a, o, r, rb, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], P["nBeliefs"], P["dBelief"],
                                      P["stepsXtrial"], P["rMin"], P["rMax"])
 

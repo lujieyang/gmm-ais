@@ -103,7 +103,7 @@ def eval_performance(policy, V, POMDP, start, D, na, tau=1, B_det=None, n_episod
             except:
                 action = np.random.randint(na)
 
-            s, b, o, r, _, _ = POMDP.SimulationStep(b, s, action+1)
+            s, b, o, r, rb , _, _ = POMDP.SimulationStep(b, s, action+1)
             reward_episode.append(r)
 
             if B_det is not None:
@@ -128,7 +128,7 @@ def eval_performance(policy, V, POMDP, start, D, na, tau=1, B_det=None, n_episod
     return average_return  # , V_mse/len(Vs)
 
 
-def interpret(BO, s, a, o, reward, D, r, nu, tau=1):
+def interpret(BO, s, a, o, reward, rb, D, r, nu, tau=1):
     num_samples = len(BO)
     dict = {}
     d = {}
@@ -146,11 +146,13 @@ def interpret(BO, s, a, o, reward, D, r, nu, tau=1):
             dict[z_cluster]["s"] = copy.deepcopy(d)
             dict[z_cluster]["o"] = copy.deepcopy(d)
             dict[z_cluster]["r"] = copy.deepcopy(d)
+            dict[z_cluster]["rb"] = copy.deepcopy(d)
             dict[z_cluster]["b"] = copy.deepcopy(d)
             dict[z_cluster]["r_pred"] = copy.deepcopy(d)
         dict[z_cluster]["s"][a_ind].append(s[i])
         dict[z_cluster]["o"][a_ind].append(o[i])
         dict[z_cluster]["r"][a_ind].append(reward[i])
+        dict[z_cluster]["rb"][a_ind].append(rb[i])
         dict[z_cluster]["b"][a_ind].append(b)
         dict[z_cluster]["r_pred"][a_ind].append(r[int(a[i] - 1)](z).detach().numpy()[0])
 
@@ -202,8 +204,8 @@ def validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt, bp, b_next, reward, a
 def plot_reward(dict, z_list, nu):
     for i in range(nu):
         for z in dict.keys():
-            l = len(dict[z]["r"][i])
-            plt.plot(z * np.ones(l), dict[z]["r"][i], "kx")
+            l = len(dict[z]["rb"][i])
+            plt.plot(z * np.ones(l), dict[z]["rb"][i], "kx")
             plt.plot(z * np.ones(l), dict[z]["r_pred"][i], "r.")
         plt.title("Reward Prediction for Action {}".format(i))
         plt.show()
@@ -223,9 +225,9 @@ if __name__ == '__main__':
     if AP2ab:
         B = B_det_to_prob(B, nu, no)
     num_samples = 5000
-    BO, BS, s, a, o, reward, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
+    BO, BS, s, a, o, reward, rb, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                                       P["stepsXtrial"], P["rMin"], P["rMax"])
-    dict = interpret(BO, s, a, o, reward, D, r, nu, tau=tau)
+    dict = interpret(BO, s, a, o, reward, rb, D, r, nu, tau=tau)
     plot_reward(dict, z_list, nu)
     B = minimize_B(z_list, B, nz)
     print("Minimized number of AIS: ", len(z_list))

@@ -10,8 +10,6 @@ class POMDP:
         self.name = name
         self.gamma = gamma
 
-
-
 class CS_POMDP(POMDP):
     def __init__(self, gamma, ncAlpha, name):
         super().__init__(gamma, name)
@@ -43,6 +41,7 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
         a_s = []
         o_s = []
         r_s = []
+        rb_s = []
         P_o_ba_s = []
         step_ind = []
         k = 0
@@ -55,7 +54,7 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
 
             a = A.rand()
 
-            s, b, o, r, bn, P_o_ba = self.SimulationStep(b, s, a, obs_prob=obs_prob)
+            s, b, o, r, rb, bn, P_o_ba  = self.SimulationStep(b, s, a, obs_prob=obs_prob)
 
             if (k > 1) and (minBeliefDist > 0):
                 md = b.Distance(BO[k-1])
@@ -68,13 +67,14 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
                 a_s.append(a)
                 o_s.append(o)
                 r_s.append(r)
+                rb_s.append(rb)
                 P_o_ba_s.append(P_o_ba)
                 print(".", end=" ")
                 if k % 80 == 0:
                     print("\n")
         print("\n")
 
-        return BO, B, s_s, a_s, o_s, r_s, P_o_ba_s, step_ind
+        return BO, B, s_s, a_s, o_s, r_s, rb_s, P_o_ba_s, step_ind
 
     def SimulationStep(self, b, s, a, obs_prob=False):
         S = self.S
@@ -87,12 +87,13 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
         b = self.Update(b, o, S)
 
         r = self.Reward(a, s)
+        rb = b.Expectation(self.r[int(a-1)]*10)
 
         if obs_prob:
             P_o_ba = self.get_observation_conditional_prob(bn, S)
         else:
             P_o_ba = 0
-        return s, b, o, r, bn, P_o_ba
+        return s, b, o, r, rb, bn, P_o_ba
 
     def get_observation_conditional_prob(self, b, Sp):
         no = len(self.p)

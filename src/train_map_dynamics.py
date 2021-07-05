@@ -124,7 +124,7 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba):
 
 
 def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model=None, P_o_za_model=None):
-    folder_name = "model/" + "100k/"
+    folder_name = "model/" + "10k/"
     r_dict = {}
     if B_det_model is not None:
         folder_name += "AP2ab/" + "obs_l_weight_2/"
@@ -189,10 +189,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Sample belief states data
-    ncBelief = 10  #5
+    ncBelief = 10
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
-    num_samples = 100000
-    BO, BS, s, a, o, r, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
+    num_samples = 10000
+    BO, BS, s, a, o, r, rb, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                                       P["stepsXtrial"], P["rMin"], P["rMax"], obs_prob=args.pred_obs)
     nz = 1000
     nu = 3
@@ -201,7 +201,7 @@ if __name__ == '__main__':
     AP2ab = False
 
     bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward, P_o_ba_t = \
-        process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba)
+        process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, rb, P_o_ba)
     action_obs_ind = action_obs_1d_ind(nu, no, action_indices, observation_indices)
 
     # "End-to-end" training to minimize AP12
