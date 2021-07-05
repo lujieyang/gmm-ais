@@ -161,9 +161,10 @@ def interpret(BO, s, a, o, reward, rb, D, r, nu, tau=1):
             r_pred = np.array(dict[c]["r_pred"][j])
             if (r_pred > 1).any():
                 plt.plot(dict[c]["s"][j], dict[c]["r"][j], 'rx')
+                plt.plot(dict[c]["s"][j], dict[c]["rb"][j], 'bo')
                 plt.plot(dict[c]["s"][j], dict[c]["r_pred"][j], 'k.')
                 plt.xlabel("s")
-                plt.ylabel("y")
+                plt.ylabel("r")
                 plt.title("Reward Prediction with Action {} for AIS {}".format(j, c))
                 plt.show()
     return dict
@@ -207,7 +208,7 @@ def plot_reward(dict, z_list, nu):
             l = len(dict[z]["rb"][i])
             plt.plot(z * np.ones(l), dict[z]["rb"][i], "kx")
             plt.plot(z * np.ones(l), dict[z]["r_pred"][i], "r.")
-        plt.title("Reward Prediction for Action {}".format(i))
+        plt.title("Expected Reward Prediction for Action {}".format(i))
         plt.show()
 
 
@@ -233,7 +234,7 @@ if __name__ == '__main__':
     print("Minimized number of AIS: ", len(z_list))
 
     bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward_values, P_o_ba_t = \
-        process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, reward, P_o_ba)
+        process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, rb, P_o_ba)
     st_ = torch.from_numpy(st).view(st.shape[0], 1).to(torch.float32)
     s_next_ = torch.from_numpy(s_next).view(bt.shape[0], 1).to(torch.float32)
     bt_ = torch.from_numpy(bt).to(torch.float32)
