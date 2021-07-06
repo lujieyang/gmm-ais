@@ -1,7 +1,7 @@
 model/10k/D_pre_1000_96_1
 ncBelief = 10, nz = 1000, nf = 96, tau = 1
-Minimized number of AIS:
-Average return:
+Minimized number of AIS: 42
+Average return: 78.06640906851413
 
 model/10k/D_pre_250_96_1
 ncBelief = 10, nz = 250, nf = 96, tau = 1
@@ -9,10 +9,11 @@ reward loss: 0.23025035858154297
 Minimized number of AIS: 44
 Average return: 42.17818213501306
 
-model/100k/D_pre_1000_96_1
+model/10k/6_layer/D_pre_1000_96_1
 ncBelief = 10, nz = 1000, nf = 96, tau = 1
-Minimized number of AIS:
-Average return:
+
+Minimized number of AIS: 51
+Average return: 81
 
 model/100k/6_layer/D_pre_1000_96_1
 

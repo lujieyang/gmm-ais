@@ -123,6 +123,19 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba):
            g_dim, action_indices[:-1], observation_indices[:-1], np.array(reward[:-1]), np.array(P_o_ba_t[:-1])
 
 
+def save_data(input_dim, bt_, bp_, b_next_, action_indices, action_obs_ind, r_, P_o_ba_t_):
+    folder_name = "data/"
+    save_dict = {"input_dim": input_dim, "bt": bt_, "bp": bp_, "b_next": b_next_, "action_indices": action_indices,
+                 "action_obs_ind": action_obs_ind, "r": r_, "P_o_ba": P_o_ba_t_}
+    torch.save(save_dict, folder_name + "data_tensor_sharp_10k.pth")
+
+
+def load_data(file_name="data/data_tensor_sharp_10k.pth"):
+    load_dict = torch.load(file_name)
+    return load_dict["input_dim"], load_dict["bt"], load_dict["bp"], load_dict["b_next"], load_dict["action_indices"], \
+           load_dict["action_obs_ind"], load_dict["r"], load_dict["P_o_ba"]
+
+
 def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model=None, P_o_za_model=None):
     folder_name = "model/" + "10k/"
     r_dict = {}
@@ -184,6 +197,9 @@ if __name__ == '__main__':
     parser.add_argument("--det_trans", help="Fit the deterministic transition of AIS (AP2a)", action="store_true")
     parser.add_argument("--pred_obs", help="Predict the observation (AP2b)", action="store_true")
     parser.add_argument("--tau", help="Temperature for Gumbel Softmax", type=float, default=1)
+    parser.add_argument("--nz", help="Number of discrete AIS", type=int,
+                        default=1000)
+    parser.add_argument("--generate_data", help="Generate belief samples", action="store_true")
     parser.add_argument("--resume_training", help="Resume training for the model", action="store_true")
     parser.add_argument("--scheduler", help="Set StepLR scheduler", action="store_true")
     args = parser.parse_args()
@@ -192,17 +208,12 @@ if __name__ == '__main__':
     ncBelief = 10
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
     num_samples = 10000
-    BO, BS, s, a, o, r, rb, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
-                                                      P["stepsXtrial"], P["rMin"], P["rMax"], obs_prob=args.pred_obs)
-    nz = 1000
+
+    nz = args.nz
     nu = 3
     no = 4
     tau = args.tau
     AP2ab = False
-
-    bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward, P_o_ba_t = \
-        process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, rb, P_o_ba)
-    action_obs_ind = action_obs_1d_ind(nu, no, action_indices, observation_indices)
 
     # "End-to-end" training to minimize AP12
     writer = SummaryWriter()
@@ -210,6 +221,27 @@ if __name__ == '__main__':
         device = torch.device("cuda")
     else:
         device = torch.device("cpu")
+
+    if args.generate_data:
+        BO, BS, s, a, o, r, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
+                                                                   P["stepsXtrial"], P["rMin"], P["rMax"],
+                                                                   obs_prob=args.pred_obs)
+        bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward, P_o_ba_t = \
+            process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba)
+        action_obs_ind = action_obs_1d_ind(nu, no, action_indices, observation_indices)
+        # Shuffle data
+        ind = np.arange(st.shape[0])
+        np.random.shuffle(ind)
+        bt_ = torch.from_numpy(bt[ind]).to(torch.float32).to(device)
+        bp_ = torch.from_numpy(bp[ind]).to(torch.float32).to(device)
+        b_next_ = torch.from_numpy(b_next[ind]).to(torch.float32).to(device)
+        r_ = torch.from_numpy(reward[ind]).view(st.shape[0], 1).to(torch.float32).to(device)
+        P_o_ba_t_ = torch.from_numpy(P_o_ba_t[ind]).to(torch.float32).to(device)
+        action_indices = torch.from_numpy(np.array(action_indices)[ind]).to(torch.float32).to(device)
+        action_obs_ind = torch.from_numpy(np.array(action_obs_ind)[ind]).to(torch.float32).to(device)
+        save_data(input_dim, bt_, bp_, b_next_, action_indices, action_obs_ind, r_, P_o_ba_t_)
+    else:
+        input_dim, bt_, bp_, b_next_, action_indices, action_obs_ind, r_, P_o_ba_t_ = load_data()
 
     nf = 96
     B_model = []
@@ -269,19 +301,6 @@ if __name__ == '__main__':
         scheduler = StepLR(optimizer, step_size=10000, gamma=0.1)
 
     num_epoch = 20000
-
-    # Shuffle data: change to DataLoader
-    ind = np.arange(st.shape[0])
-    np.random.shuffle(ind)
-    st_ = torch.from_numpy(st[ind]).view(st.shape[0], 1).to(torch.float32).to(device)
-    s_next_ = torch.from_numpy(s_next[ind]).view(s_next.shape[0], 1).to(torch.float32).to(device)
-    bt_ = torch.from_numpy(bt[ind]).to(torch.float32).to(device)
-    bp_ = torch.from_numpy(bp[ind]).to(torch.float32).to(device)
-    b_next_ = torch.from_numpy(b_next[ind]).to(torch.float32).to(device)
-    r_ = torch.from_numpy(reward[ind]).view(st.shape[0], 1).to(torch.float32).to(device)
-    P_o_ba_t_ = torch.from_numpy(P_o_ba_t[ind]).to(torch.float32).to(device)
-    action_indices = np.array(action_indices)[ind]
-    action_obs_ind = np.array(action_obs_ind)[ind]
 
     for epoch in range(num_epoch):
         optimizer.zero_grad()

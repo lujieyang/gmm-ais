@@ -161,9 +161,10 @@ def interpret(BO, s, a, o, reward, rb, D, r, nu, tau=1):
             r_pred = np.array(dict[c]["r_pred"][j])
             if (r_pred > 1).any():
                 plt.plot(dict[c]["s"][j], dict[c]["r"][j], 'rx')
+                plt.plot(dict[c]["s"][j], dict[c]["rb"][j], 'bo')
                 plt.plot(dict[c]["s"][j], dict[c]["r_pred"][j], 'k.')
                 plt.xlabel("s")
-                plt.ylabel("y")
+                plt.ylabel("r")
                 plt.title("Reward Prediction with Action {} for AIS {}".format(j, c))
                 plt.show()
     return dict
@@ -207,7 +208,7 @@ def plot_reward(dict, z_list, nu):
             l = len(dict[z]["rb"][i])
             plt.plot(z * np.ones(l), dict[z]["rb"][i], "kx")
             plt.plot(z * np.ones(l), dict[z]["r_pred"][i], "r.")
-        plt.title("Reward Prediction for Action {}".format(i))
+        plt.title("Expected Reward Prediction for Action {}".format(i))
         plt.show()
 
 
