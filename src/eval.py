@@ -179,11 +179,26 @@ def minimize_B(z_list, B, nz):
     return B #/B_sum
 
 
-def B_det_to_prob(B_det, nu, no):
+def calculate_prob_B(D, nu, bt, bp, action_indices, tau=1):
     B = []
     for i in range(nu):
-        B.append(np.sum(B_det[i*no:(i+1)*no, :, :], axis=0))
+        ind = (np.array(action_indices) == i)
+        Db = F.gumbel_softmax(D(bt[ind]), tau=tau, hard=True).detach().numpy()
+        z_next = F.gumbel_softmax(D(bp[ind]), tau=tau, hard=True).detach().numpy()
+        BT = np.linalg.lstsq(Db, z_next)[0]
+        B.append(BT.T)
     return np.array(B)
+
+
+def project(B):
+    for i in range(B.shape[0]):
+        d = B[i]
+        m = np.min(d, 0)
+        d -= m
+        s = np.sum(d, 0)
+        s[s == 0] = 1
+        d /= s
+    return B
 
 
 def validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt, bp, b_next, reward, action_indices, tau=1):
@@ -212,6 +227,19 @@ def plot_reward(dict, z_list, nu):
         plt.show()
 
 
+def plot_discrete(dict, z_list):
+    for i in range(len(z_list)):
+        c = z_list[i]
+        plt.plot(dict[c]["s"][0], '.')
+        plt.plot(dict[c]["s"][1], '.')
+        plt.plot(dict[c]["s"][2], '.')
+        plt.title(str(i))
+        plt.show()
+        dict[c]["b"][2][15].plot()
+        dict[c]["b"][0][15].plot()
+        dict[c]["b"][1][15].plot()
+
+
 if __name__ == '__main__':
     nz = 1000
     nu = 3
@@ -223,15 +251,11 @@ if __name__ == '__main__':
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
     B, r, D, z_list = load_model(nz, nf, nu, tau, AP2ab=AP2ab)
 
-    if AP2ab:
-        B = B_det_to_prob(B, nu, no)
     num_samples = 5000
     BO, BS, s, a, o, reward, rb, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                                       P["stepsXtrial"], P["rMin"], P["rMax"])
     dict = interpret(BO, s, a, o, reward, rb, D, r, nu, tau=tau)
     plot_reward(dict, z_list, nu)
-    B = minimize_B(z_list, B, nz)
-    print("Minimized number of AIS: ", len(z_list))
 
     bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward_values, P_o_ba_t = \
         process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, rb, P_o_ba)
@@ -243,6 +267,12 @@ if __name__ == '__main__':
     r_ = torch.from_numpy(reward_values).view(st.shape[0], 1).to(torch.float32)
     loss_fn_z = nn.L1Loss()
     loss_fn_r = nn.MSELoss()
+    if AP2ab:
+        B = calculate_prob_B(B, nu, no)
+    B = minimize_B(z_list, B, nz)
+    print("Minimized number of AIS: ", len(z_list))
+    if AP2ab:
+        B = project(B)
     validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt_, bp_, b_next_, r_, action_indices, tau=tau)
 
     policy, V = value_iteration(B, r, nz, nu, z_list)

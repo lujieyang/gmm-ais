@@ -28,8 +28,6 @@ def cal_loss(B_model, r_model, D_pre_model, loss_fn_z, loss_fn_r, nu, no, bt, bp
         if B_det_model is None:
             z = B_model[i](Db)
             z_next = F.gumbel_softmax(D_pre_model(bp[ind]), tau=tau, hard=True)
-            # Obtain class for cross entropy loss
-            # _, z_next_class = z_next.max(dim=1)
             pred_loss += loss_fn_z(z, z_next)
         r_pred = r_model[i](Db)
         r_loss += l*loss_fn_r(r_pred, r[ind])
@@ -123,8 +121,10 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba):
            g_dim, action_indices[:-1], observation_indices[:-1], np.array(reward[:-1]), np.array(P_o_ba_t[:-1])
 
 
-def save_data(input_dim, bt_, bp_, b_next_, action_indices, action_obs_ind, r_, P_o_ba_t_):
+def save_data(input_dim, bt_, bp_, b_next_, action_indices, action_obs_ind, r_, P_o_ba_t_, AP2ab=False):
     folder_name = "data/"
+    if AP2ab:
+        folder_name += "AP2ab/"
     save_dict = {"input_dim": input_dim, "bt": bt_, "bp": bp_, "b_next": b_next_, "action_indices": action_indices,
                  "action_obs_ind": action_obs_ind, "r": r_, "P_o_ba": P_o_ba_t_}
     torch.save(save_dict, folder_name + "data_rb_sharp_10k.pth")
@@ -140,7 +140,7 @@ def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model=N
     folder_name = "model/" + "10k/"
     r_dict = {}
     if B_det_model is not None:
-        folder_name += "AP2ab/" + "obs_l_weight_2/"
+        folder_name += "AP2ab/" #+ "obs_l_weight_2/"
         B_det = []
         for i in range(len(B_det_model)):
             B_det_model[i].cpu()
@@ -179,7 +179,6 @@ def load_model(nz, nf, nu, tau, AP2ab=False):
     else:
         B = np.load(folder_name + "B_{}_{}_{}.npy".format(nz, nf, tau))
     z_list = np.load(folder_name + "zList_{}_{}_{}.npy".format(nz, nf, tau))
-    # z_list = np.arange(nz)
     r_dict = torch.load(folder_name + "r_{}_{}_{}.pth".format(nz, nf, tau))
     r = []
     for i in range(nu):
@@ -239,7 +238,7 @@ if __name__ == '__main__':
         P_o_ba_t_ = torch.from_numpy(P_o_ba_t[ind]).to(torch.float32).to(device)
         action_indices = torch.from_numpy(np.array(action_indices)[ind]).to(torch.float32).to(device)
         action_obs_ind = torch.from_numpy(np.array(action_obs_ind)[ind]).to(torch.float32).to(device)
-        save_data(input_dim, bt_, bp_, b_next_, action_indices, action_obs_ind, r_, P_o_ba_t_)
+        save_data(input_dim, bt_, bp_, b_next_, action_indices, action_obs_ind, r_, P_o_ba_t_, args.pred_obs)
     else:
         input_dim, bt_, bp_, b_next_, action_indices, action_obs_ind, r_, P_o_ba_t_ = load_data()
 
