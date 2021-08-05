@@ -268,7 +268,7 @@ if __name__ == '__main__':
     loss_fn_z = nn.L1Loss()
     loss_fn_r = nn.MSELoss()
     if AP2ab:
-        B = calculate_prob_B(B, nu, no)
+        B = calculate_prob_B(D, nu, bt_, bp_, action_indices, tau=tau)
     B = minimize_B(z_list, B, nz)
     print("Minimized number of AIS: ", len(z_list))
     if AP2ab:

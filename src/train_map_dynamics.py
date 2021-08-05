@@ -173,7 +173,7 @@ def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model=N
 
 
 def load_model(nz, nf, nu, tau, AP2ab=False):
-    folder_name = "model/" + "10k/" + "5_layer/" #+ "scheduler/"
+    folder_name = "model/" + "10k/" + "AP2ab/" #+ "scheduler/"
     if AP2ab:
         B = np.load(folder_name + "B_det_{}_{}_{}.npy".format(nz, nf, tau))
     else:
@@ -258,7 +258,7 @@ if __name__ == '__main__':
             nn.Linear(4 * nf, 2 * nf), nn.LeakyReLU(0.1),
             nn.Linear(nf * 2, nf), nn.LeakyReLU(0.1),
             nn.Linear(nf, nz))
-    loss_fn_z = nn.L1Loss()  # CrossEntropyLoss()
+    loss_fn_z = nn.L1Loss()
     loss_fn_r = nn.MSELoss()
     D_pre_model.to(device)
     B_det_model = None

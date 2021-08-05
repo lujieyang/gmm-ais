@@ -37,6 +37,7 @@ model/10k/5_layer/
 lr = 1e-3, num_epoch = 15000
 reward loss: 0.9913931488990784
 Minimized number of AIS:  40
+Average return: 54.326169383529525
 D_pre_model = nn.Sequential(
         nn.Linear(input_dim, nf), nn.LeakyReLU(0.1),
         nn.Linear(nf, 2 * nf), nn.LeakyReLU(0.1),
