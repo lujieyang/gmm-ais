@@ -90,8 +90,7 @@ def eval_performance(policy, V, POMDP, start, D, na, tau=1, B_det=None, n_episod
         reward_episode = []
         b = copy.deepcopy(start)
         s = S.Crop(b.rand())
-        z_one_hot = F.gumbel_softmax(D(torch.from_numpy(b.to_array()).to(torch.float32)), tau=tau, hard=True).data.numpy()
-        # z_one_hot = F.gumbel_softmax(D(torch.from_numpy(np.array(s).reshape(-1)).to(torch.float32)), hard=True).data.numpy()
+        z_one_hot = F.gumbel_softmax(D(torch.from_numpy(np.array(s).reshape(-1)).to(torch.float32)), hard=True).data.numpy()
 
         for j in range(30):
             ind_z = np.where(z_one_hot == 1)[0][0]
@@ -109,9 +108,8 @@ def eval_performance(policy, V, POMDP, start, D, na, tau=1, B_det=None, n_episod
             if B_det is not None:
                 z_one_hot = B_det@z_one_hot
             else:
-                z_one_hot = F.gumbel_softmax(D(torch.from_numpy(b.to_array()).to(torch.float32)), tau=tau, hard=True).data.numpy()
-                # z_one_hot = F.gumbel_softmax(D(torch.from_numpy(np.array(s).reshape(-1)).to(torch.float32)),
-                #                              hard=True).data.numpy()
+                z_one_hot = F.gumbel_softmax(D(torch.from_numpy(np.array(s).reshape(-1)).to(torch.float32)),
+                                             hard=True).data.numpy()
 
         rets = []
         R = 0
@@ -121,11 +119,8 @@ def eval_performance(policy, V, POMDP, start, D, na, tau=1, B_det=None, n_episod
         returns.append(rets[0])
 
     average_return = np.mean(returns)
-    # V_mse = np.linalg.norm(np.array(Vs)-np.array(V_bs))
     print("Average reward: ", average_return)
-    # print("V mse: ", V_mse)
-    # print("Average V mse", V_mse/len(Vs))
-    return average_return  # , V_mse/len(Vs)
+    return average_return
 
 
 def interpret(BO, s, a, o, reward, D, r, nu, tau=1):
@@ -220,27 +215,7 @@ if __name__ == '__main__':
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
     B, r, D, z_list = load_model(nz, nf, nu, tau, AP2ab=AP2ab)
 
-    if AP2ab:
-        B = B_det_to_prob(B, nu, no)
-    num_samples = 5000
-    BO, BS, s, a, o, reward, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
-                                                      P["stepsXtrial"], P["rMin"], P["rMax"])
-    dict = interpret(BO, s, a, o, reward, D, r, nu, tau=tau)
-    plot_reward(dict, z_list, nu)
-    B = minimize_B(z_list, B, nz)
     print("Minimized number of AIS: ", len(z_list))
-
-    bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward_values, P_o_ba_t = \
-        process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, reward, P_o_ba)
-    st_ = torch.from_numpy(st).view(st.shape[0], 1).to(torch.float32)
-    s_next_ = torch.from_numpy(s_next).view(bt.shape[0], 1).to(torch.float32)
-    bt_ = torch.from_numpy(bt).to(torch.float32)
-    bp_ = torch.from_numpy(bp).to(torch.float32)
-    b_next_ = torch.from_numpy(b_next).to(torch.float32)
-    r_ = torch.from_numpy(reward_values).view(st.shape[0], 1).to(torch.float32)
-    loss_fn_z = nn.L1Loss()
-    loss_fn_r = nn.MSELoss()
-    validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt_, bp_, b_next_, r_, action_indices, tau=tau)
 
     policy, V = value_iteration(B, r, nz, nu, z_list)
     aR = []

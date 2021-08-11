@@ -36,4 +36,10 @@ class GBelief(Belief, GMixture):
         b[self.maxC * (g_dim + 1):self.maxC * (g_dim + 1) + nBelief] = [g.S for g in self.g]
         return b
 
+    def sample_array(self):
+        n = 1000
+        X = np.linspace(-20, 20, n)
+        Y = self.Value(X)
+        return Y
+
 
