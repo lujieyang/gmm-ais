@@ -200,17 +200,17 @@ if __name__ == '__main__':
     parser.add_argument("--pred_obs", help="Predict the observation (AP2b)", action="store_true")
     parser.add_argument("--tau", help="Temperature for Gumbel Softmax", type=float, default=1)
     parser.add_argument("--nz", help="Number of Discrete AIS", type=int, default=100)
+    parser.add_argument("--nb", help="Number of Samples for Belief", type=int, default=500)
     parser.add_argument("--resume_training", help="Resume training for the model", action="store_true")
     parser.add_argument("--generate_data", help="Generate belief samples", action="store_true")
     parser.add_argument("--scheduler", help="Set StepLR scheduler", action="store_true")
     args = parser.parse_args()
 
     # Sample belief states data
-    ncBelief = 10  #5
+    ncBelief = 10
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
     num_samples = 1000#0
-    BO, BS, s, a, o, r, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
-                                                      P["stepsXtrial"], P["rMin"], P["rMax"], obs_prob=args.pred_obs)
+
     nz = args.nz
     nu = 3
     no = 4
@@ -253,14 +253,14 @@ if __name__ == '__main__':
         B_model.append(nn.Linear(nz, nz, bias=False).to(device))
         r_model.append(nn.Sequential(
             nn.Linear(nz, nf), nn.LeakyReLU(0.1),
-            nn.Linear(nf, nf), nn.LeakyReLU(0.1),
+            # nn.Linear(nf, nf), nn.LeakyReLU(0.1),
             nn.Linear(nf, 1)).to(device))
     project_col_sum(B_model)
     D_pre_model = nn.Sequential(
             nn.Linear(1, nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
             nn.Linear(nf, 2 * nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
-            # nn.Linear(2 * nf, 4 * nf), nn.LeakyReLU(0.1),
-            # nn.Linear(4 * nf, 2 * nf), nn.LeakyReLU(0.1),
+            nn.Linear(2 * nf, 4 * nf), nn.LeakyReLU(0.1),
+            nn.Linear(4 * nf, 2 * nf), nn.LeakyReLU(0.1),
             nn.Linear(nf * 2, nf), nn.LeakyReLU(0.1),
             nn.Linear(nf, nz))
     loss_fn_z = nn.L1Loss()  # CrossEntropyLoss()
