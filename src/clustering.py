@@ -62,7 +62,7 @@ def cluster_state(st, s_next, reward, action_indices, nz, nu):
         l2 = pl[ind]
         z2 = np.zeros((nz, l2.size))
         z2[l2, np.arange(l2.size)] = 1
-        B0 = LS_B(z1, z2) #solve_B(z1, z2, nz)
+        B0 = solve_B(z1, z2, nz)
         B.append(B0)
         rT = np.linalg.lstsq(z1.T, reward[ind].T)
         r.append(rT[0].T)
@@ -73,16 +73,16 @@ def LS_B(z1, z2):
     BT = np.linalg.lstsq(z1.T, z2.T)
     B0 = BT[0].T
     B0 = np.clip(B0, 0, 1)
-    # s = np.sum(B0, axis=0)
-    # s[s==0] = 1
-    # B0 = B0/s
+    s = np.sum(B0, axis=0)
+    s[s==0] = 1
+    B0 = B0/s
     return B0
 
 
 def solve_B(z1, z2, nz):
     B = cp.Variable((nz, nz), nonneg=True)
 
-    loss = cp.norm(cp.matmul(B, z1)-z2)
+    loss = cp.norm(cp.matmul(B, z1)-z2, "fro")
     constraints = [cp.matmul(np.ones((1, nz)), B) == 1]
 
     objective = cp.Minimize(loss)
@@ -197,7 +197,7 @@ def eval_performance(policy, V, POMDP, start, na, B_det=None, n_episodes=100, be
         s = S.Crop(b.rand())
 
         for j in range(30):
-            ind_z = int(min([np.round((s+20)*nz/40), nz-1])) #
+            ind_z = kmeans.predict(s.reshape((1, 1)))[0]# int(min([np.round((s+20)*nz/40), nz-1]))
 
             Vs.append(V[ind_z])
 
@@ -331,7 +331,7 @@ if __name__ == '__main__':
     # Sample belief states data
     ncBelief = 10
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
-    num_samples = 1000#0
+    num_samples = 10000
 
     nz = args.nz
     nu = 3
@@ -347,9 +347,9 @@ if __name__ == '__main__':
     else:
         bt, b_next, bp, st, s_next, action_indices, reward = load_data()
 
-    # B, r, kmeans = cluster_state(st, s_next, reward, action_indices, nz, nu)
-    B, r = grid_state(POMDP, nz, nu)
+    B, r, kmeans = cluster_state(st, s_next, reward, action_indices, nz, nu)
+    # B, r = grid_state(POMDP, nz, nu)
     policy, V = value_iteration(B, r, nz, nu)
-    # plot_reward_value(kmeans, r, V, nu)
+    plot_reward_value(kmeans, r, V, nu)
     for i in range(50):
         eval_performance(policy, V, POMDP, P["start"], nu)
