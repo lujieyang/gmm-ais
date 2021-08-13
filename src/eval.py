@@ -1,11 +1,14 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 import copy
 import torch
 from torch.nn import functional as F
-import torch.nn as nn
+import argparse
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
 from Experiments.GetTestParameters import GetTest1Parameters
-from src.train_map_dynamics import process_belief, load_model
+from src.train_map_dynamics import load_model
 
 def value_iteration(B, r, nz, na, z_list, epsilon=0.0001, discount_factor=0.95):
     """
@@ -90,7 +93,9 @@ def eval_performance(policy, V, POMDP, start, D, na, tau=1, B_det=None, n_episod
         reward_episode = []
         b = copy.deepcopy(start)
         s = S.Crop(b.rand())
-        z_one_hot = F.gumbel_softmax(D(torch.from_numpy(np.array(s).reshape(-1)).to(torch.float32)), hard=True).data.numpy()
+        z_one_hot = F.gumbel_softmax(D(torch.from_numpy(b.to_array()).to(torch.float32)), tau=tau,
+                                     hard=True).data.numpy()
+        # z_one_hot = F.gumbel_softmax(D(torch.from_numpy(np.array(s).reshape(-1)).to(torch.float32)), hard=True).data.numpy()
 
         for j in range(30):
             ind_z = np.where(z_one_hot == 1)[0][0]
@@ -108,8 +113,10 @@ def eval_performance(policy, V, POMDP, start, D, na, tau=1, B_det=None, n_episod
             if B_det is not None:
                 z_one_hot = B_det@z_one_hot
             else:
-                z_one_hot = F.gumbel_softmax(D(torch.from_numpy(np.array(s).reshape(-1)).to(torch.float32)),
+                z_one_hot = F.gumbel_softmax(D(torch.from_numpy(b.to_array()).to(torch.float32)), tau=tau,
                                              hard=True).data.numpy()
+                # z_one_hot = F.gumbel_softmax(D(torch.from_numpy(np.array(s).reshape(-1)).to(torch.float32)),
+                #                              hard=True).data.numpy()
 
         rets = []
         R = 0
@@ -205,15 +212,24 @@ def plot_reward(dict, z_list, nu):
 
 
 if __name__ == '__main__':
-    nz = 1000
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--nz", help="Number of Discrete AIS", type=int, default=100)
+    parser.add_argument("--tau", help="Temperature for Gumbel Softmax", type=int, default=1)
+    parser.add_argument("--folder_name", type=str, default="model/")
+    parser.add_argument("--AP2ab", help="Predict the deterministic transition and observation (AP2ab)", action="store_true")
+    parser.add_argument("--seed", type=int, help="Random seed of the experiment", default=42)
+    args = parser.parse_args()
+
+    nz = args.nz
     nu = 3
     no = 4
     nf = 96
     ncBelief = 10
-    tau = 1
-    AP2ab = False
+    tau = args.tau
+    AP2ab = args.AP2ab
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
-    B, r, D, z_list = load_model(nz, nf, nu, tau, AP2ab=AP2ab)
+    folder_name = args.folder_name + "seed" + str(args.seed) + "/"
+    B, r, D, z_list = load_model(nz, nf, nu, tau, AP2ab=AP2ab, folder_name=folder_name)
 
     print("Minimized number of AIS: ", len(z_list))
 
