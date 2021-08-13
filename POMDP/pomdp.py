@@ -37,8 +37,8 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
         S = self.S
 
         md = minBeliefDist + 1
-        B = []
-        BO = []
+        B = []    # Belief after state prediction (before observation correction)
+        BO = []   # Belief after observation correction
         s_s = []
         a_s = []
         o_s = []
@@ -46,9 +46,8 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
         P_o_ba_s = []
         step_ind = []
         k = 0
-        r = maxR - 1
         while k < nBeliefs:
-            if (k % stepsXtrial == 0):  #or (r > maxR) or (r < minR):
+            if (k % stepsXtrial == 0):
                 b = copy.deepcopy(start)
                 s = S.Crop(b.rand())
                 step_ind.append(k)
@@ -61,13 +60,13 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
                 md = b.Distance(BO[k-1])
 
             if md > minBeliefDist:
-                k += 1
                 BO.append(b)
                 B.append(bn)
                 s_s.append(s)
                 a_s.append(a)
                 o_s.append(o)
                 r_s.append(r)
+                k += 1
                 P_o_ba_s.append(P_o_ba)
                 print(".", end=" ")
                 if k % 80 == 0:
@@ -79,14 +78,13 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
     def SimulationStep(self, b, s, a, obs_prob=False):
         S = self.S
 
+        r = self.Reward(a, s)
         s, b = self.Prediction(s, b, a, S)
         bn = copy.deepcopy(b)
         po = self.GetObsModelFixedS(s)
 
         o = RandVector(po)
         b = self.Update(b, o, S)
-
-        r = self.Reward(a, s)
 
         if obs_prob:
             P_o_ba = self.get_observation_conditional_prob(bn, S)

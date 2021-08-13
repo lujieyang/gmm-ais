@@ -12,6 +12,9 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba):
     step_ind_copy = np.array(step_ind)
     # Remove the first belief before observation (useless)
     B.pop(0)
+    # State & belief collection is shifted by one time index from a, r, o, P_o_ba
+    a.pop(0)
+    r.pop(0)
     g_dim = BO[0].g[0].dim
     bt = []
     b_next = []
@@ -32,18 +35,18 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba):
             else:
                 bt.append(b)
                 st.append(s[i])
-                action_indices.append(int(a[i] - 1))
-                reward.append(r[i])
                 if i < num_samples - 1:
                     b_next_p.append(bp)
                     s_next.append(s[i+1])
+                    action_indices.append(int(a[i] - 1))
+                    reward.append(r[i])
                 if i > 0 and i not in step_ind_copy:
                     b_next.append(bt[-1])
     else:
         pass
 
     return np.array(bt[:-1]), np.array(b_next), np.array(b_next_p), np.array(st[:-1]), np.array(s_next), \
-           np.array(action_indices[:-1]), np.array(reward[:-1])
+           np.array(action_indices), np.array(reward)
 
 
 def cluster_state(st, s_next, reward, action_indices, nz, nu):
@@ -98,6 +101,19 @@ def solve_B(z1, z2, nz):
         pass
 
     return B.value
+
+
+def check_B(st, s_next, action_indices, nz, nu):
+    l1 = np.clip(np.floor((st + 20) * nz / 40), 0, nz - 1).astype(int)
+    l2 = np.clip(np.floor((s_next + 20) * nz / 40), 0, nz - 1).astype(int)
+    for i in range(nu):
+        ind = (action_indices == i)
+        k1 = l1[ind]
+        z1 = np.zeros((nz, k1.size))
+        z1[k1, np.arange(k1.size)] = 1
+        k2 = l2[ind]
+        z2 = np.zeros((nz, k2.size))
+        z2[k2, np.arange(k2.size)] = 1
 
 
 def grid_state(POMDP, nz, nu):
@@ -197,7 +213,7 @@ def eval_performance(policy, V, POMDP, start, na, B_det=None, n_episodes=100, be
         s = S.Crop(b.rand())
 
         for j in range(30):
-            ind_z = kmeans.predict(s.reshape((1, 1)))[0]# int(min([np.round((s+20)*nz/40), nz-1]))
+            ind_z = int(min([np.floor((s+20)*nz/40), nz-1])) #kmeans.predict(s.reshape((1, 1)))[0]#
 
             Vs.append(V[ind_z])
 
@@ -225,9 +241,7 @@ def eval_performance(policy, V, POMDP, start, na, B_det=None, n_episodes=100, be
     average_return = np.mean(returns)
     # V_mse = np.linalg.norm(np.array(Vs)-np.array(V_bs))
     print("Average reward: ", average_return)
-    # print("V mse: ", V_mse)
-    # print("Average V mse", V_mse/len(Vs))
-    return average_return  # , V_mse/len(Vs)
+    return average_return
 
 
 def save_data(bt, b_next, bp, st, s_next, action_indices, reward):
@@ -325,13 +339,14 @@ if __name__ == '__main__':
     parser.add_argument("--pred_obs", help="Predict the observation (AP2b)", action="store_true")
     parser.add_argument("--nz", help="Number of discrete AIS", type=int,
                         default=1000)
+    parser.add_argument("--num_samples", help="Number of Training Samples", type=int, default=10000)
     parser.add_argument("--generate_data", help="Generate belief samples", action="store_true")
     args = parser.parse_args()
 
     # Sample belief states data
     ncBelief = 10
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
-    num_samples = 10000
+    num_samples = args.num_samples
 
     nz = args.nz
     nu = 3
@@ -347,9 +362,9 @@ if __name__ == '__main__':
     else:
         bt, b_next, bp, st, s_next, action_indices, reward = load_data()
 
-    B, r, kmeans = cluster_state(st, s_next, reward, action_indices, nz, nu)
-    # B, r = grid_state(POMDP, nz, nu)
+    # B, r, kmeans = cluster_state(st, s_next, reward, action_indices, nz, nu)
+    B, r = grid_state(POMDP, nz, nu)
     policy, V = value_iteration(B, r, nz, nu)
-    plot_reward_value(kmeans, r, V, nu)
+    # plot_reward_value(kmeans, r, V, nu)
     for i in range(50):
         eval_performance(policy, V, POMDP, P["start"], nu)

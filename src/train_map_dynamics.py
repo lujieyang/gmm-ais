@@ -84,6 +84,11 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba):
     step_ind_copy = np.array(step_ind)
     # Remove the first belief before observation (useless)
     B.pop(0)
+    # State & belief collection is shifted by one time index from a, r, o, P_o_ba
+    a.pop(0)
+    r.pop(0)
+    o.pop(0)
+    P_o_ba.pop(0)
     g_dim = BO[0].g[0].dim
     input_dim = ncBelief * (1 + g_dim + g_dim ** 2)  # w, mean, flatten(Sigma)
     bt = []
@@ -107,20 +112,20 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba):
             else:
                 bt.append(b)
                 st.append(s[i])
-                action_indices.append(int(a[i] - 1))
-                observation_indices.append(int(o[i]))
-                reward.append(r[i])
-                P_o_ba_t.append(P_o_ba[i])
                 if i < num_samples - 1:
                     b_next_p.append(bp)
                     s_next.append(s[i+1])
+                    action_indices.append(int(a[i] - 1))
+                    observation_indices.append(int(o[i]))
+                    reward.append(r[i])
+                    P_o_ba_t.append(P_o_ba[i])
                 if i > 0 and i not in step_ind_copy:
                     b_next.append(bt[-1])
     else:
         pass
 
     return np.array(bt[:-1]), np.array(b_next), np.array(b_next_p), np.array(st[:-1]), np.array(s_next), input_dim, \
-           g_dim, action_indices[:-1], observation_indices[:-1], np.array(reward[:-1]), np.array(P_o_ba_t[:-1])
+           g_dim, action_indices, observation_indices, np.array(reward), np.array(P_o_ba_t)
 
 
 def save_data(input_dim, st_, s_next_, bt_, bp_, b_next_, action_indices, action_obs_ind, r_, P_o_ba_t_):
@@ -200,7 +205,8 @@ if __name__ == '__main__':
     parser.add_argument("--pred_obs", help="Predict the observation (AP2b)", action="store_true")
     parser.add_argument("--tau", help="Temperature for Gumbel Softmax", type=float, default=1)
     parser.add_argument("--nz", help="Number of Discrete AIS", type=int, default=100)
-    parser.add_argument("--nb", help="Number of Samples for Belief", type=int, default=500)
+    parser.add_argument("--num_epoch", help="Number of Samples for Belief", type=int, default=10000)
+    parser.add_argument("--num_samples", help="Number of Training Samples", type=int, default=10000)
     parser.add_argument("--resume_training", help="Resume training for the model", action="store_true")
     parser.add_argument("--generate_data", help="Generate belief samples", action="store_true")
     parser.add_argument("--scheduler", help="Set StepLR scheduler", action="store_true")
@@ -209,7 +215,7 @@ if __name__ == '__main__':
     # Sample belief states data
     ncBelief = 10
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
-    num_samples = 1000#0
+    num_samples = args.num_samples
 
     nz = args.nz
     nu = 3
@@ -304,7 +310,7 @@ if __name__ == '__main__':
     if args.scheduler:
         scheduler = StepLR(optimizer, step_size=10000, gamma=0.1)
 
-    num_epoch = 10000
+    num_epoch = args.num_epoch
 
     for epoch in range(num_epoch):
         optimizer.zero_grad()
