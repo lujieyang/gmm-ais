@@ -145,7 +145,7 @@ def load_data(data_file="data/data_tensor_w_state.pth"):
            load_dict["P_o_ba"]
 
 
-def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, folder_name = "model/", B_det_model=None, P_o_za_model=None):
+def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, folder_name="model/", B_det_model=None, P_o_za_model=None):
     r_dict = {}
     if B_det_model is not None:
         folder_name += "AP2ab/" #+ "obs_l_weight_2/"
@@ -222,8 +222,9 @@ if __name__ == '__main__':
     parser.add_argument("--generate_data", help="Generate belief samples", action="store_true")
     parser.add_argument("--scheduler", help="Set StepLR scheduler", action="store_true")
     parser.add_argument("--folder_name", help="Folder name for saving models", type=str, default="model/")
-    parser.add_argument("--data_file", help="File name for data", type=str, default="data/data.pth")
+    parser.add_argument("--data_file", help="File name for data", type=str, default="data/data_tensor_w_state.pth")
     parser.add_argument("--seed", type=int, help="Random seed of the experiment", default=42)
+    parser.add_argument("--lr", type=float, help="Learning Rate", default=1e-3)
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
@@ -282,8 +283,8 @@ if __name__ == '__main__':
     D_pre_model = nn.Sequential(
             nn.Linear(input_dim, nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
             nn.Linear(nf, 2 * nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
-            nn.Linear(2 * nf, 4 * nf), nn.LeakyReLU(0.1),
-            nn.Linear(4 * nf, 2 * nf), nn.LeakyReLU(0.1),
+            # nn.Linear(2 * nf, 4 * nf), nn.LeakyReLU(0.1),
+            # nn.Linear(4 * nf, 2 * nf), nn.LeakyReLU(0.1),
             nn.Linear(nf * 2, nf), nn.LeakyReLU(0.1),
             nn.Linear(nf, nz))
     loss_fn_z = nn.L1Loss()  # CrossEntropyLoss()
@@ -321,7 +322,7 @@ if __name__ == '__main__':
             params += x.parameters()
     for x in r_model:
         params += x.parameters()
-    optimizer = torch.optim.Adam(params, lr=1e-3)
+    optimizer = torch.optim.Adam(params, lr=args.lr)
 
     scheduler = None
     if args.scheduler:
@@ -353,8 +354,10 @@ if __name__ == '__main__':
 
     z_list = minimize_AIS(D_pre_model, nu, nz, bt_, bp_, action_indices, tau=tau)
     D_pre_model.cpu()
-    folder_name = args.folder_name + "seed" + str(args.seed) + "/"
+    folder_name = args.folder_name + "seed" + str(args.seed) + "/lr" + str(args.lr) + "/"
     save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, folder_name=folder_name, B_det_model=B_det_model,
                P_o_za_model=P_o_za_model)
+
+    print("nz: {}, tau: {}, lr: {}, seed: {}, model: {}".format(args.nz, args.tau, args.lr, args.seed, args.folder_name))
 
 
