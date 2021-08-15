@@ -2,6 +2,7 @@ import os
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
+import csv
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
 
@@ -12,7 +13,7 @@ if __name__ == '__main__':
 
     nz_list = [50, 100, 200, 250, 500, 750, 1000]
     tau_list = [1, 5, 10, 50, 100]
-    lr_list = [1e-4, 3e-4] #[1e-3, 3e-3, 1e-4, 3e-4]
+    lr_list = [1e-3, 3e-3, 1e-4, 3e-4]
     seed = 42
     nf = 96
 
@@ -35,5 +36,15 @@ if __name__ == '__main__':
         plt.legend(loc="best")
         plt.title("Lr = " + str(lr))
         plt.show()
-        print(avg_mean[n1])
+
+    file_name = args.folder_name + "performance.csv"
+
+    with open(file_name, 'w') as csvfile:
+        csvwriter = csv.writer(csvfile)
+        csvwriter.writerow([args.folder_name])
+        for i in range(n_lr):
+            csvwriter.writerow(["lr = " + str(lr_list[i])])
+            csvwriter.writerow(tau_list)
+            for j in range(n_nz):
+                csvwriter.writerow(avg_mean[i, :, j])
 
