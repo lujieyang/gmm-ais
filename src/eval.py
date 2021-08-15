@@ -126,7 +126,7 @@ def eval_performance(policy, V, POMDP, start, D, na, tau=1, B_det=None, n_episod
         returns.append(rets[0])
 
     average_return = np.mean(returns)
-    print("Average reward: ", average_return)
+    # print("Average reward: ", average_return)
     return average_return
 
 
@@ -218,7 +218,10 @@ if __name__ == '__main__':
     parser.add_argument("--folder_name", type=str, default="model/")
     parser.add_argument("--AP2ab", help="Predict the deterministic transition and observation (AP2ab)", action="store_true")
     parser.add_argument("--seed", type=int, help="Random seed of the experiment", default=42)
+    parser.add_argument("--lr", type=float, help="Learning Rate", default=1e-3)
     args = parser.parse_args()
+
+    print("nz: {}, tau: {}, lr: {}, seed: {}, model: {}".format(args.nz, args.tau, args.lr, args.seed, args.folder_name))
 
     nz = args.nz
     nu = 3
@@ -228,16 +231,18 @@ if __name__ == '__main__':
     tau = args.tau
     AP2ab = args.AP2ab
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
-    folder_name = args.folder_name + "seed" + str(args.seed) + "/"
+    folder_name = args.folder_name + "seed" + str(args.seed) + "/lr" + str(args.lr) + "/"
     B, r, D, z_list = load_model(nz, nf, nu, tau, AP2ab=AP2ab, folder_name=folder_name)
 
     print("Minimized number of AIS: ", len(z_list))
 
     policy, V = value_iteration(B, r, nz, nu, z_list)
     aR = []
-    for i in range(100):
-        print("Trial ", i)
+    for i in range(10):
+        # print("Trial ", i)
         aR.append(eval_performance(policy, V, POMDP, P["start"], D, nu, tau=tau))
-    print("Average reward: ", np.mean(np.array(aR)))
+    np.save(folder_name + "mean_{}_{}_{}".format(nz, nf, tau), np.mean(np.array(aR)))
+    np.save(folder_name + "std_{}_{}_{}".format(nz, nf, tau), np.std(np.array(aR)))
+    print("Average return: ", np.mean(np.array(aR)))
 
 
