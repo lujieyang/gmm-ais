@@ -30,7 +30,6 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
         self.O = O
 
     def SampleBeliefs(self, start, nBeliefs, minBeliefDist, stepsXtrial, minR, maxR, obs_prob=False):
-        np.random.seed(8888)
         A = self.A
         S = self.S
 
@@ -79,15 +78,15 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
     def SimulationStep(self, b, s, a, obs_prob=False):
         S = self.S
 
+        r = self.Reward(a, s)
+        rb = b.Expectation(self.r[int(a - 1)] * 10)
+
         s, b = self.Prediction(s, b, a, S)
         bn = copy.deepcopy(b)
         po = self.GetObsModelFixedS(s)
 
         o = RandVector(po)
         b = self.Update(b, o, S)
-
-        r = self.Reward(a, s)
-        rb = b.Expectation(self.r[int(a-1)]*10)
 
         if obs_prob:
             P_o_ba = self.get_observation_conditional_prob(bn, S)
@@ -98,13 +97,13 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
     def get_observation_conditional_prob(self, b, Sp):
         no = len(self.p)
         P_o_ba = np.zeros(no)
-        for o in range(no-1):
+        for o in range(no):
             po = self.GetObsModelFixedO(o)
             bo = po * b
             bCrop = bo.Crop(Sp)
             b_unnormalize = bCrop.Compress(b.maxC)
             P_o_ba[o] = np.sum(b_unnormalize.w)
-        P_o_ba[-1] = 1 - np.sum(P_o_ba)
+        P_o_ba /= np.sum(P_o_ba)
         return P_o_ba
 
 
