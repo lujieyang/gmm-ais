@@ -1,16 +1,19 @@
+
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 import copy
 import torch
 from torch.nn import functional as F
-import torch.nn as nn
+import argparse
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
 from Experiments.GetTestParameters import GetTest1Parameters
-from src.train_map_dynamics import process_belief, load_model
+from src.train_map_dynamics import load_model, load_data
 
 def value_iteration(B, r, nz, na, z_list, epsilon=0.0001, discount_factor=0.95):
     """
     Value Iteration Algorithm.
-
     Args:
         B: numpy array of size(na, nz, nz). transition probabilities of the environment P(z(t+1)|z(t), a(t)).
         r: numpy array of size (na, nz). reward function r(z(t),a(t))
@@ -18,7 +21,6 @@ def value_iteration(B, r, nz, na, z_list, epsilon=0.0001, discount_factor=0.95):
         na: number of actions in the environment.
         epsilon: We stop evaluation once our value function change is less than theta for all states.
         discount_factor: Gamma discount factor.
-
     Returns:
         A tuple (policy, V) of the optimal policy and the optimal value function.
     """
@@ -90,8 +92,8 @@ def eval_performance(policy, V, POMDP, start, D, na, tau=1, B_det=None, n_episod
         reward_episode = []
         b = copy.deepcopy(start)
         s = S.Crop(b.rand())
-        z_one_hot = F.gumbel_softmax(D(torch.from_numpy(b.to_array()).to(torch.float32)), tau=tau, hard=True).data.numpy()
-        # z_one_hot = F.gumbel_softmax(D(torch.from_numpy(np.array(s).reshape(-1)).to(torch.float32)), hard=True).data.numpy()
+        z_one_hot = F.gumbel_softmax(D(torch.from_numpy(b.to_array()).to(torch.float32)), tau=tau,
+                                     hard=True).data.numpy()
 
         for j in range(30):
             ind_z = np.where(z_one_hot == 1)[0][0]
@@ -103,15 +105,14 @@ def eval_performance(policy, V, POMDP, start, D, na, tau=1, B_det=None, n_episod
             except:
                 action = np.random.randint(na)
 
-            s, b, o, r, rb , _, _ = POMDP.SimulationStep(b, s, action+1)
+            s, b, o, r, rb, _, _ = POMDP.SimulationStep(b, s, action+1)
             reward_episode.append(r)
 
             if B_det is not None:
                 z_one_hot = B_det@z_one_hot
             else:
-                z_one_hot = F.gumbel_softmax(D(torch.from_numpy(b.to_array()).to(torch.float32)), tau=tau, hard=True).data.numpy()
-                # z_one_hot = F.gumbel_softmax(D(torch.from_numpy(np.array(s).reshape(-1)).to(torch.float32)),
-                #                              hard=True).data.numpy()
+                z_one_hot = F.gumbel_softmax(D(torch.from_numpy(b.to_array()).to(torch.float32)), tau=tau,
+                                             hard=True).data.numpy()
 
         rets = []
         R = 0
@@ -121,14 +122,11 @@ def eval_performance(policy, V, POMDP, start, D, na, tau=1, B_det=None, n_episod
         returns.append(rets[0])
 
     average_return = np.mean(returns)
-    # V_mse = np.linalg.norm(np.array(Vs)-np.array(V_bs))
-    print("Average reward: ", average_return)
-    # print("V mse: ", V_mse)
-    # print("Average V mse", V_mse/len(Vs))
-    return average_return  # , V_mse/len(Vs)
+    # print("Average reward: ", average_return)
+    return average_return
 
 
-def interpret(BO, s, a, o, reward, rb, D, r, nu, tau=1):
+def interpret(BO, s, a, o, reward, D, r, nu, tau=1):
     num_samples = len(BO)
     dict = {}
     d = {}
@@ -146,13 +144,11 @@ def interpret(BO, s, a, o, reward, rb, D, r, nu, tau=1):
             dict[z_cluster]["s"] = copy.deepcopy(d)
             dict[z_cluster]["o"] = copy.deepcopy(d)
             dict[z_cluster]["r"] = copy.deepcopy(d)
-            dict[z_cluster]["rb"] = copy.deepcopy(d)
             dict[z_cluster]["b"] = copy.deepcopy(d)
             dict[z_cluster]["r_pred"] = copy.deepcopy(d)
         dict[z_cluster]["s"][a_ind].append(s[i])
         dict[z_cluster]["o"][a_ind].append(o[i])
         dict[z_cluster]["r"][a_ind].append(reward[i])
-        dict[z_cluster]["rb"][a_ind].append(rb[i])
         dict[z_cluster]["b"][a_ind].append(b)
         dict[z_cluster]["r_pred"][a_ind].append(r[int(a[i] - 1)](z).detach().numpy()[0])
 
@@ -161,10 +157,9 @@ def interpret(BO, s, a, o, reward, rb, D, r, nu, tau=1):
             r_pred = np.array(dict[c]["r_pred"][j])
             if (r_pred > 1).any():
                 plt.plot(dict[c]["s"][j], dict[c]["r"][j], 'rx')
-                plt.plot(dict[c]["s"][j], dict[c]["rb"][j], 'bo')
                 plt.plot(dict[c]["s"][j], dict[c]["r_pred"][j], 'k.')
                 plt.xlabel("s")
-                plt.ylabel("r")
+                plt.ylabel("y")
                 plt.title("Reward Prediction with Action {} for AIS {}".format(j, c))
                 plt.show()
     return dict
@@ -179,26 +174,11 @@ def minimize_B(z_list, B, nz):
     return B #/B_sum
 
 
-def calculate_prob_B(D, nu, bt, bp, action_indices, tau=1):
+def B_det_to_prob(B_det, nu, no):
     B = []
     for i in range(nu):
-        ind = (np.array(action_indices) == i)
-        Db = F.gumbel_softmax(D(bt[ind]), tau=tau, hard=True).detach().numpy()
-        z_next = F.gumbel_softmax(D(bp[ind]), tau=tau, hard=True).detach().numpy()
-        BT = np.linalg.lstsq(Db, z_next)[0]
-        B.append(BT.T)
+        B.append(np.sum(B_det[i*no:(i+1)*no, :, :], axis=0))
     return np.array(B)
-
-
-def project(B):
-    for i in range(B.shape[0]):
-        d = B[i]
-        m = np.min(d, 0)
-        d -= m
-        s = np.sum(d, 0)
-        s[s == 0] = 1
-        d /= s
-    return B
 
 
 def validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt, bp, b_next, reward, action_indices, tau=1):
@@ -220,66 +200,46 @@ def validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt, bp, b_next, reward, a
 def plot_reward(dict, z_list, nu):
     for i in range(nu):
         for z in dict.keys():
-            l = len(dict[z]["rb"][i])
-            plt.plot(z * np.ones(l), dict[z]["rb"][i], "kx")
+            l = len(dict[z]["r"][i])
+            plt.plot(z * np.ones(l), dict[z]["r"][i], "kx")
             plt.plot(z * np.ones(l), dict[z]["r_pred"][i], "r.")
-        plt.title("Expected Reward Prediction for Action {}".format(i))
+        plt.title("Reward Prediction for Action {}".format(i))
         plt.show()
-
-
-def plot_discrete(dict, z_list):
-    for i in range(len(z_list)):
-        c = z_list[i]
-        plt.plot(dict[c]["s"][0], '.')
-        plt.plot(dict[c]["s"][1], '.')
-        plt.plot(dict[c]["s"][2], '.')
-        plt.title(str(i))
-        plt.show()
-        dict[c]["b"][2][15].plot()
-        dict[c]["b"][0][15].plot()
-        dict[c]["b"][1][15].plot()
 
 
 if __name__ == '__main__':
-    nz = 1000
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--nz", help="Number of Discrete AIS", type=int, default=100)
+    parser.add_argument("--tau", help="Temperature for Gumbel Softmax", type=int, default=1)
+    parser.add_argument("--folder_name", type=str, default="model/")
+    parser.add_argument("--AP2ab", help="Predict the deterministic transition and observation (AP2ab)", action="store_true")
+    parser.add_argument("--seed", type=int, help="Random seed of the experiment", default=42)
+    parser.add_argument("--lr", type=float, help="Learning Rate", default=1e-3)
+    args = parser.parse_args()
+
+    print("nz: {}, tau: {}, lr: {}, seed: {}, model: {}".format(args.nz, args.tau, args.lr, args.seed, args.folder_name))
+
+    nz = args.nz
     nu = 3
     no = 4
     nf = 96
     ncBelief = 10
-    tau = 1
-    AP2ab = False
+    tau = args.tau
+    AP2ab = args.AP2ab
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
-    B, r, D, z_list = load_model(nz, nf, nu, tau, AP2ab=AP2ab)
+    if args.AP2ab:
+        folder_name = args.folder_name + "AP2ab/" + "seed" + str(args.seed) + "/lr" + str(args.lr) + "/"
+    else:
+        folder_name = args.folder_name + "seed" + str(args.seed) + "/lr" + str(args.lr) + "/"
+    B, r, D, z_list = load_model(nz, nf, nu, tau, folder_name=folder_name)
 
-    num_samples = 5000
-    BO, BS, s, a, o, reward, rb, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
-                                                      P["stepsXtrial"], P["rMin"], P["rMax"])
-    dict = interpret(BO, s, a, o, reward, rb, D, r, nu, tau=tau)
-    plot_reward(dict, z_list, nu)
-
-    bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward_values, P_o_ba_t = \
-        process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, rb, P_o_ba)
-    st_ = torch.from_numpy(st).view(st.shape[0], 1).to(torch.float32)
-    s_next_ = torch.from_numpy(s_next).view(bt.shape[0], 1).to(torch.float32)
-    bt_ = torch.from_numpy(bt).to(torch.float32)
-    bp_ = torch.from_numpy(bp).to(torch.float32)
-    b_next_ = torch.from_numpy(b_next).to(torch.float32)
-    r_ = torch.from_numpy(reward_values).view(st.shape[0], 1).to(torch.float32)
-    loss_fn_z = nn.L1Loss()
-    loss_fn_r = nn.MSELoss()
-    if AP2ab:
-        B = calculate_prob_B(D, nu, bt_, bp_, action_indices, tau=tau)
-    B = minimize_B(z_list, B, nz)
     print("Minimized number of AIS: ", len(z_list))
-    if AP2ab:
-        B = project(B)
-    validation_loss(B, r, D, loss_fn_z, loss_fn_r, nu, bt_, bp_, b_next_, r_, action_indices, tau=tau)
 
     policy, V = value_iteration(B, r, nz, nu, z_list)
     aR = []
-    for i in range(100):
-        print("Trial ", i)
+    for i in range(10):
+        # print("Trial ", i)
         aR.append(eval_performance(policy, V, POMDP, P["start"], D, nu, tau=tau))
-    print("Average reward: ", np.mean(np.array(aR)))
-
-
+    np.save(folder_name + "mean_{}_{}_{}".format(nz, nf, tau), np.mean(np.array(aR)))
+    np.save(folder_name + "std_{}_{}_{}".format(nz, nf, tau), np.std(np.array(aR)))
+    print("Average return: ", np.mean(np.array(aR)))
