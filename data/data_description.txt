@@ -1,0 +1,8 @@
+data.pth
+with P_o_ba
+
+data_r_expectation.pth
+r = rb
+
+data_tensor_w_state.pth
+P_o_ba = 0

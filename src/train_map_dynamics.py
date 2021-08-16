@@ -1,10 +1,13 @@
 import numpy as np
+import os
 import argparse
 import torch
 from torch.nn import functional as F
 import torch.nn as nn
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.tensorboard import SummaryWriter
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
 from Experiments.GetTestParameters import GetTest1Parameters
 
 
@@ -25,12 +28,9 @@ def cal_loss(B_model, r_model, D_pre_model, loss_fn_z, loss_fn_r, nu, no, bt, bp
         # Calculate loss for each (discrete) action
         ind = (actions == i)
         Db = F.gumbel_softmax(D_pre_model(bt[ind]), tau=tau, hard=True)
-        if B_det_model is None:
-            z = B_model[i](Db)
-            z_next = F.gumbel_softmax(D_pre_model(bp[ind]), tau=tau, hard=True)
-            # Obtain class for cross entropy loss
-            # _, z_next_class = z_next.max(dim=1)
-            pred_loss += loss_fn_z(z, z_next)
+        z = B_model[i](Db)
+        z_next = F.gumbel_softmax(D_pre_model(bp[ind]), tau=tau, hard=True)
+        pred_loss += loss_fn_z(z, z_next)
         r_pred = r_model[i](Db)
         r_loss += l*loss_fn_r(r_pred, r[ind])
         if P_o_za_model is not None:
@@ -84,6 +84,11 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba):
     step_ind_copy = np.array(step_ind)
     # Remove the first belief before observation (useless)
     B.pop(0)
+    # State & belief collection is shifted by one time index from a, r, o, P_o_ba
+    a.pop(0)
+    r.pop(0)
+    o.pop(0)
+    P_o_ba.pop(0)
     g_dim = BO[0].g[0].dim
     input_dim = ncBelief * (1 + g_dim + g_dim ** 2)  # w, mean, flatten(Sigma)
     bt = []
@@ -107,40 +112,44 @@ def process_belief(BO, B, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba):
             else:
                 bt.append(b)
                 st.append(s[i])
-                action_indices.append(int(a[i] - 1))
-                observation_indices.append(int(o[i]))
-                reward.append(r[i])
-                P_o_ba_t.append(P_o_ba[i])
                 if i < num_samples - 1:
                     b_next_p.append(bp)
                     s_next.append(s[i+1])
+                    action_indices.append(int(a[i] - 1))
+                    observation_indices.append(int(o[i]))
+                    reward.append(r[i])
+                    P_o_ba_t.append(P_o_ba[i])
                 if i > 0 and i not in step_ind_copy:
                     b_next.append(bt[-1])
     else:
         pass
 
     return np.array(bt[:-1]), np.array(b_next), np.array(b_next_p), np.array(st[:-1]), np.array(s_next), input_dim, \
-           g_dim, action_indices[:-1], observation_indices[:-1], np.array(reward[:-1]), np.array(P_o_ba_t[:-1])
+           g_dim, action_indices, observation_indices, np.array(reward), np.array(P_o_ba_t)
 
 
-def save_data(input_dim, bt_, bp_, b_next_, action_indices, action_obs_ind, r_, P_o_ba_t_):
-    folder_name = "data/"
+def save_data(input_dim, st_, s_next_, bt_, bp_, b_next_, action_indices, action_obs_ind, r_, P_o_ba_t_,
+              data_file="data/data_tensor_w_state.pth"):
     save_dict = {"input_dim": input_dim, "bt": bt_, "bp": bp_, "b_next": b_next_, "action_indices": action_indices,
-                 "action_obs_ind": action_obs_ind, "r": r_, "P_o_ba": P_o_ba_t_}
-    torch.save(save_dict, folder_name + "data_tensor_sharp_10k.pth")
+                 "action_obs_ind": action_obs_ind, "r": r_, "st": st_, "s_next": s_next_, "P_o_ba": P_o_ba_t_}
+    torch.save(save_dict, data_file)
 
 
-def load_data(file_name="data/data_tensor_sharp_10k.pth"):
-    load_dict = torch.load(file_name)
-    return load_dict["input_dim"], load_dict["bt"], load_dict["bp"], load_dict["b_next"], load_dict["action_indices"], \
-           load_dict["action_obs_ind"], load_dict["r"], load_dict["P_o_ba"]
+def load_data(data_file="data/data_tensor_w_state.pth", device=torch.device("cpu")):
+    load_dict = torch.load(data_file, map_location=device)
+    return load_dict["input_dim"], load_dict["st"], load_dict["s_next"],load_dict["bt"], load_dict["bp"], \
+           load_dict["b_next"], load_dict["action_indices"], load_dict["action_obs_ind"], load_dict["r"], \
+           load_dict["P_o_ba"]
 
 
-def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model=None, P_o_za_model=None):
-    folder_name = "model/" + "10k/"
+def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, folder_name="model/", B_det_model=None, P_o_za_model=None):
     r_dict = {}
+    if not os.path.exists(folder_name):
+        try:
+            os.makedirs(folder_name)
+        except:
+            pass
     if B_det_model is not None:
-        folder_name += "AP2ab/" + "obs_l_weight_2/"
         B_det = []
         for i in range(len(B_det_model)):
             B_det_model[i].cpu()
@@ -150,15 +159,14 @@ def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model=N
             r_model[j].cpu()
             r_dict[str(j)] = r_model[j].state_dict()
             r_dict["model_" + str(j)] = r_model[j]
-    else:
-        B = []
-        for i in range(len(B_model)):
-            B_model[i].cpu()
-            B.append(B_model[i].weight.data.numpy())
-            r_model[i].cpu()
-            r_dict[str(i)] = r_model[i].state_dict()
-            r_dict["model_" + str(i)] = r_model[i]
-        np.save(folder_name + "B_{}_{}_{}".format(nz, nf, tau), B)
+    B = []
+    for i in range(len(B_model)):
+        B_model[i].cpu()
+        B.append(B_model[i].weight.data.numpy())
+        r_model[i].cpu()
+        r_dict[str(i)] = r_model[i].state_dict()
+        r_dict["model_" + str(i)] = r_model[i]
+    np.save(folder_name + "B_{}_{}_{}".format(nz, nf, tau), B)
     if P_o_za_model is not None:
         P_o_za = []
         for i in range(len(P_o_za_model)):
@@ -172,12 +180,8 @@ def save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model=N
     torch.save(D_pre_model, folder_name + "D_pre_{}_{}_{}_model.pth".format(nz, nf, tau))
 
 
-def load_model(nz, nf, nu, tau, AP2ab=False):
-    folder_name = "model/" + "10k/" + "AP2ab/" #+ "scheduler/"
-    if AP2ab:
-        B = np.load(folder_name + "B_det_{}_{}_{}.npy".format(nz, nf, tau))
-    else:
-        B = np.load(folder_name + "B_{}_{}_{}.npy".format(nz, nf, tau))
+def load_model(nz, nf, nu, tau, folder_name="model/"):
+    B = np.load(folder_name + "B_{}_{}_{}.npy".format(nz, nf, tau))
     z_list = np.load(folder_name + "zList_{}_{}_{}.npy".format(nz, nf, tau))
     r_dict = torch.load(folder_name + "r_{}_{}_{}.pth".format(nz, nf, tau))
     r = []
@@ -195,18 +199,28 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--det_trans", help="Fit the deterministic transition of AIS (AP2a)", action="store_true")
     parser.add_argument("--pred_obs", help="Predict the observation (AP2b)", action="store_true")
-    parser.add_argument("--tau", help="Temperature for Gumbel Softmax", type=float, default=1)
-    parser.add_argument("--nz", help="Number of discrete AIS", type=int,
-                        default=1000)
-    parser.add_argument("--generate_data", help="Generate belief samples", action="store_true")
+    parser.add_argument("--tau", help="Temperature for Gumbel Softmax", type=int, default=1)
+    parser.add_argument("--nz", help="Number of Discrete AIS", type=int, default=100)
+    parser.add_argument("--num_epoch", help="Number of Training Epochs", type=int, default=10000)
+    parser.add_argument("--num_samples", help="Number of Training Samples", type=int, default=10000)
+    parser.add_argument("--batch_size", type=int, default=512)
     parser.add_argument("--resume_training", help="Resume training for the model", action="store_true")
+    parser.add_argument("--generate_data", help="Generate belief samples", action="store_true")
     parser.add_argument("--scheduler", help="Set StepLR scheduler", action="store_true")
+    parser.add_argument("--folder_name", help="Folder name for saving models", type=str, default="model/")
+    parser.add_argument("--data_file", help="File name for data", type=str, default="data/data_r_expectation.pth")
+    parser.add_argument("--seed", type=int, help="Random seed of the experiment", default=42)
+    parser.add_argument("--lr", type=float, help="Learning Rate", default=1e-3)
     args = parser.parse_args()
+
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
 
     # Sample belief states data
     ncBelief = 10
     POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
-    num_samples = 10000
+    num_samples = args.num_samples
+    batch_size = args.batch_size
 
     nz = args.nz
     nu = 3
@@ -214,7 +228,6 @@ if __name__ == '__main__':
     tau = args.tau
     AP2ab = False
 
-    # "End-to-end" training to minimize AP12
     writer = SummaryWriter()
     if torch.cuda.is_available():
         device = torch.device("cuda")
@@ -222,15 +235,17 @@ if __name__ == '__main__':
         device = torch.device("cpu")
 
     if args.generate_data:
-        BO, BS, s, a, o, r, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
+        BO, BS, s, a, o, r, rb, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                                                    P["stepsXtrial"], P["rMin"], P["rMax"],
                                                                    obs_prob=args.pred_obs)
         bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward, P_o_ba_t = \
-            process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba)
+            process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, rb, P_o_ba)
         action_obs_ind = action_obs_1d_ind(nu, no, action_indices, observation_indices)
         # Shuffle data
         ind = np.arange(st.shape[0])
         np.random.shuffle(ind)
+        st_ = torch.from_numpy(st[ind]).view(st.shape[0], 1).to(torch.float32).to(device)
+        s_next_ = torch.from_numpy(s_next[ind]).view(s_next.shape[0], 1).to(torch.float32).to(device)
         bt_ = torch.from_numpy(bt[ind]).to(torch.float32).to(device)
         bp_ = torch.from_numpy(bp[ind]).to(torch.float32).to(device)
         b_next_ = torch.from_numpy(b_next[ind]).to(torch.float32).to(device)
@@ -238,9 +253,10 @@ if __name__ == '__main__':
         P_o_ba_t_ = torch.from_numpy(P_o_ba_t[ind]).to(torch.float32).to(device)
         action_indices = torch.from_numpy(np.array(action_indices)[ind]).to(torch.float32).to(device)
         action_obs_ind = torch.from_numpy(np.array(action_obs_ind)[ind]).to(torch.float32).to(device)
-        save_data(input_dim, bt_, bp_, b_next_, action_indices, action_obs_ind, r_, P_o_ba_t_)
+        save_data(input_dim, st_, s_next_, bt_, bp_, b_next_, action_indices, action_obs_ind, r_, P_o_ba_t_, data_file=args.data_file)
     else:
-        input_dim, bt_, bp_, b_next_, action_indices, action_obs_ind, r_, P_o_ba_t_ = load_data()
+        input_dim, st_, s_next_, bt_, bp_, b_next_, action_indices, action_obs_ind, r_, P_o_ba_t_ = load_data(
+            data_file=args.data_file, device=device)
 
     nf = 96
     B_model = []
@@ -254,11 +270,9 @@ if __name__ == '__main__':
     D_pre_model = nn.Sequential(
             nn.Linear(input_dim, nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
             nn.Linear(nf, 2 * nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
-            nn.Linear(2 * nf, 4 * nf), nn.LeakyReLU(0.1),
-            nn.Linear(4 * nf, 2 * nf), nn.LeakyReLU(0.1),
             nn.Linear(nf * 2, nf), nn.LeakyReLU(0.1),
             nn.Linear(nf, nz))
-    loss_fn_z = nn.L1Loss()
+    loss_fn_z = nn.L1Loss()  # CrossEntropyLoss()
     loss_fn_r = nn.MSELoss()
     D_pre_model.to(device)
     B_det_model = None
@@ -276,16 +290,15 @@ if __name__ == '__main__':
         project_col_sum(P_o_za_model)
 
     if args.resume_training:
-        B, r_model, D_pre_model, z_list = load_model(nz, nf, nu, tau, AP2ab=AP2ab)
+        B, r_model, D_pre_model, z_list = load_model(nz, nf, nu, tau)
         D_pre_model.to(device)
         for i in range(len(r_model)):
             r_model[i].to(device)
 
     params = list(D_pre_model.parameters())
-    if B_det_model is None:
-        for x in B_model:
-            params += x.parameters()
-    else:
+    for x in B_model:
+        params += x.parameters()
+    if B_det_model is not None:
         for x in B_det_model:
             params += x.parameters()
     if P_o_za_model is not None:
@@ -293,13 +306,13 @@ if __name__ == '__main__':
             params += x.parameters()
     for x in r_model:
         params += x.parameters()
-    optimizer = torch.optim.Adam(params, lr=1e-3)
+    optimizer = torch.optim.Adam(params, lr=args.lr)
 
     scheduler = None
     if args.scheduler:
         scheduler = StepLR(optimizer, step_size=10000, gamma=0.1)
 
-    num_epoch = 20000
+    num_epoch = args.num_epoch
 
     for epoch in range(num_epoch):
         optimizer.zero_grad()
@@ -325,6 +338,11 @@ if __name__ == '__main__':
 
     z_list = minimize_AIS(D_pre_model, nu, nz, bt_, bp_, action_indices, tau=tau)
     D_pre_model.cpu()
-    save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, B_det_model, P_o_za_model)
+    if args.det_trans:
+        folder_name = args.folder_name + "AP2ab/" + "seed" + str(args.seed) + "/lr" + str(args.lr) + "/"
+    else:
+        folder_name = args.folder_name + "seed" + str(args.seed) + "/lr" + str(args.lr) + "/"
+    save_model(B_model, r_model, D_pre_model, z_list, nz, nf, tau, folder_name=folder_name, B_det_model=B_det_model,
+               P_o_za_model=P_o_za_model)
 
-
+    print("nz: {}, tau: {}, lr: {}, seed: {}, model: {}".format(args.nz, args.tau, args.lr, args.seed, args.folder_name))
