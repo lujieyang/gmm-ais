@@ -208,7 +208,7 @@ if __name__ == '__main__':
     parser.add_argument("--generate_data", help="Generate belief samples", action="store_true")
     parser.add_argument("--scheduler", help="Set StepLR scheduler", action="store_true")
     parser.add_argument("--folder_name", help="Folder name for saving models", type=str, default="model/")
-    parser.add_argument("--data_file", help="File name for data", type=str, default="data/data_r_expectation.pth")
+    parser.add_argument("--data_file", help="File name for data", type=str, default="data/data.pth")
     parser.add_argument("--seed", type=int, help="Random seed of the experiment", default=42)
     parser.add_argument("--lr", type=float, help="Learning Rate", default=1e-3)
     args = parser.parse_args()
@@ -237,9 +237,9 @@ if __name__ == '__main__':
     if args.generate_data:
         BO, BS, s, a, o, r, rb, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                                                    P["stepsXtrial"], P["rMin"], P["rMax"],
-                                                                   obs_prob=args.pred_obs)
+                                                                   obs_prob=True)
         bt, b_next, bp, st, s_next, input_dim, g_dim, action_indices, observation_indices, reward, P_o_ba_t = \
-            process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, rb, P_o_ba)
+            process_belief(BO, BS, num_samples, step_ind, ncBelief, s, a, o, r, P_o_ba)
         action_obs_ind = action_obs_1d_ind(nu, no, action_indices, observation_indices)
         # Shuffle data
         ind = np.arange(st.shape[0])

@@ -13,7 +13,6 @@ from Lib.Gaussian import Gaussian
 
 def GetTest1Parameters(ncBelief=4, ncAlpha=9, actionScale=2):
     """
-
     :param ncBelief: Number of components in the belief mixtures.
     :param ncAlpha: Number of components in the alpha mixtures.
     :param actionScale: Scale factor to apply to the right/left displacements.
@@ -49,11 +48,11 @@ def GetTest1Parameters(ncBelief=4, ncAlpha=9, actionScale=2):
     om.append(GMixture(np.ones((1, 5)), [Gaussian(21, so), Gaussian(19, so),
                                          Gaussian(17, so), Gaussian(15, so),
                                          Gaussian(13, so)]))
-    sd = .4
+    sd = 1.6
     # Door
     om.append(GMixture(np.ones((1, 4)), [Gaussian(-11, sd), Gaussian(-5, sd),
                                          Gaussian(3, sd), Gaussian(9, sd)]))
-    sc = 1
+    sc = 1.6
     # Corridor
     om.append(GMixture(np.ones((1, 8)), [Gaussian(-9, sc), Gaussian(-7, sc),
                                          Gaussian(-3, sc), Gaussian(-1, sc),
@@ -65,7 +64,7 @@ def GetTest1Parameters(ncBelief=4, ncAlpha=9, actionScale=2):
     rm = []
     rm.append(GMixture(np.array([-2, -2, -2]), [Gaussian(-21, 1), Gaussian(-19, 1), Gaussian(-17, 1)]))
     rm.append(GMixture(np.array([-2, -2, -2]), [Gaussian(21, 1), Gaussian(19, 1), Gaussian(17, 1)]))
-    rm.append(GMixture(np.array([-5, 5, -5]), [Gaussian(-25, 250), Gaussian(3, 1), Gaussian(25, 250)]))
+    rm.append(GMixture(np.array([-10, 2, -10]), [Gaussian(-25, 250), Gaussian(3, 3), Gaussian(25, 250)]))
     RM = CS_DA_RewardModel(S, A, rm)
 
     # Assemble the POMDP
@@ -106,6 +105,5 @@ if __name__ == "__main__":
     POMDP, P = GetTest1Parameters(ncBelief=10)
     plot_model(POMDP.p, "Observation Model")
     plot_model(POMDP.r, "Reward Model")
-    BO, B, s, a, o, r, rb, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], P["nBeliefs"], P["dBelief"],
+    BO, B, s, a, o, r, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], P["nBeliefs"], P["dBelief"],
                                      P["stepsXtrial"], P["rMin"], P["rMax"])
-
