@@ -268,8 +268,10 @@ if __name__ == '__main__':
             nn.Linear(nf, 1)).to(device))
     project_col_sum(B_model)
     D_pre_model = nn.Sequential(
-            nn.Linear(input_dim, nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
-            nn.Linear(nf, 2 * nf), nn.LeakyReLU(0.1),  # nn.ReLU(),
+            nn.Linear(input_dim, nf), nn.LeakyReLU(0.1),
+            nn.Linear(nf, 2 * nf), nn.LeakyReLU(0.1),
+            nn.Linear(2 * nf, 4 * nf), nn.LeakyReLU(0.1),
+            nn.Linear(4 * nf, 2 * nf), nn.LeakyReLU(0.1),
             nn.Linear(nf * 2, nf), nn.LeakyReLU(0.1),
             nn.Linear(nf, nz))
     loss_fn_z = nn.L1Loss()  # CrossEntropyLoss()
@@ -316,8 +318,10 @@ if __name__ == '__main__':
 
     for epoch in range(num_epoch):
         optimizer.zero_grad()
+        # ind = np.arange(args.batch_size)
+        # np.random.shuffle(ind)
         pred_loss, r_loss, obs_loss = cal_loss(B_model, r_model, D_pre_model, loss_fn_z, loss_fn_r, nu, no, bt_, bp_,
-                                               b_next_, action_indices, action_obs_ind, r_, l=10, tau=tau,
+                                               b_next_, action_indices, action_obs_ind, 10*r_, l=10, tau=tau,
                                                B_det_model=B_det_model, P_o_za_model=P_o_za_model, P_o_ba=P_o_ba_t_)
         loss = pred_loss + r_loss + obs_loss
         loss.backward()

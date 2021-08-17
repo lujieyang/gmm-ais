@@ -122,7 +122,7 @@ def eval_performance(policy, V, POMDP, start, D, na, tau=1, B_det=None, n_episod
         returns.append(rets[0])
 
     average_return = np.mean(returns)
-    # print("Average reward: ", average_return)
+    print("Average reward: ", average_return)
     return average_return
 
 
