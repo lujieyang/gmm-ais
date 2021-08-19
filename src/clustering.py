@@ -4,6 +4,7 @@ import argparse
 from sklearn.cluster import KMeans
 import copy
 import cvxpy as cp
+import time
 import pickle
 import os
 import sys
@@ -107,7 +108,7 @@ def solve_B(z1, z2, nz):
     problem = cp.Problem(objective, constraints)
 
     # solve problem
-    problem.solve(solver=cp.SCS, verbose=True)
+    problem.solve(solver=cp.SCS, verbose=False)
 
     if not (problem.status == cp.OPTIMAL):
         print("unsuccessful...")
@@ -281,13 +282,14 @@ def load_data(folder_name="data/sample_belief/"):
     return bt, b_next, bp, st, s_next, action_indices, reward
 
 
-def save_model(B, r, kmeans, aR, nz, nb, folder_name="cluster/"):
+def save_model(B, r, kmeans, aR, dt, nz, nb, folder_name="cluster/"):
     if not os.path.exists(folder_name):
         os.makedirs(folder_name)
     np.save(folder_name + "B_{}_{}".format(nz, nb), B)
     np.save(folder_name + "r_{}_{}".format(nz, nb), r)
     np.save(folder_name + "mean_{}_{}".format(nz, nb), np.mean(np.array(aR)))
     np.save(folder_name + "std_{}_{}".format(nz, nb), np.std(np.array(aR)))
+    np.save(folder_name + "time_{}_{}".format(nz, nb), dt)
     with open(folder_name + "kmeans_{}_{}.pkl".format(nz, nb), "wb") as f:
         pickle.dump(kmeans, f)
 
@@ -317,7 +319,7 @@ if __name__ == '__main__':
                         default=1000)
     parser.add_argument("--nb", help="Number of sample points to approximate belief distribution", type=int,
                         default=1000)
-    parser.add_argument("--num_samples", help="Number of Training Samples", type=int, default=10000)
+    parser.add_argument("--num_samples", help="Number of Training Samples", type=int, default=100000)
     parser.add_argument("--generate_data", help="Generate belief samples", action="store_true")
     parser.add_argument("--folder_name", help="Folder name for data", type=str, default="data/100k/")
     args = parser.parse_args()
@@ -341,9 +343,12 @@ if __name__ == '__main__':
     else:
         bt, b_next, bp, st, s_next, action_indices, reward = load_data(folder_name=args.folder_name)
 
+    start_time = time.time()
     B, r, kmeans = cluster_belief(bt, bp, reward, action_indices, nz, nu)
     policy, V = value_iteration(B, r, nz, nu)
+    end_time = time.time()
     aR = []
     for i in range(50):
         aR.append(eval_performance(policy, V, POMDP, P["start"], nu))
-    save_model(B, r, kmeans, aR, nz, args.nb, folder_name="cluster/")
+    dt = end_time - start_time
+    save_model(B, r, kmeans, aR, dt, nz, args.nb, folder_name="cluster/")

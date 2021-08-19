@@ -16,9 +16,11 @@ if __name__ == '__main__':
 
     avg_mean = []
     avg_std = []
+    dt = []
     for nz in nz_list:
         avg_mean.append(np.load(args.folder_name + "mean_{}_{}.npy".format(nz, nb))/10)
         avg_std.append(np.load(args.folder_name + "std_{}_{}.npy".format(nz, nb))/np.sqrt(10))
+        dt.append(np.load(args.folder_name + "time_{}_{}.npy".format(nz, nb)))
     plt.errorbar(nz_list, avg_mean, avg_std, linestyle='None', fmt='-o')
     plt.xticks(nz_list)
     plt.legend(loc="best")
@@ -32,4 +34,5 @@ if __name__ == '__main__':
         csvwriter.writerow(nz_list)
         csvwriter.writerow(avg_mean)
         csvwriter.writerow(avg_std)
+        csvwriter.writerow(dt)
 

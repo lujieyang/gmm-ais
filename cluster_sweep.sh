@@ -5,10 +5,10 @@
 #SBATCH --exclusive
 
 
-a_values=( 50 75 100 200 250 300 450 550 600 650 700 750 800 850 900 950 1000 1100 1500)
+a_values=( 75 100 200 250 300 450 400 500 550 600 650 700 750 800 850 900 950 1000 1100 1500)
 
 trial=${SLURM_ARRAY_TASK_ID}
 a=${a_values[$(( trial % ${#a_values[@]} ))]}
 trial=$(( trial / ${#a_values[@]} ))
 
-python src/clustering.py --nz $a --folder_name "data/100k/"
+python src/clustering.py --nz $a --folder_name "data/parameter3/"
