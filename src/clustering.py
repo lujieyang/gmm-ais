@@ -314,6 +314,22 @@ def plot_reward_value(kmeans, r, V, nu):
         plt.show()
 
 
+def plot_ais_reward(bt, kmeans, r, reward, action_indices, V, nz, nu): 
+    l = kmeans.predict(bt)
+    x = np.arange(nz)
+    plt.plot(x, V, '.')
+    plt.title("Value Function")
+    plt.show()
+    for i in range(nu):
+        ind = (action_indices==i)
+        plt.plot(l[ind], reward[ind], 'b.', label="actual")
+        plt.plot(x, r[i], 'r*', label="prediction")
+        plt.legend(loc="best")
+        plt.xlabel("AIS index")
+        plt.title("Action {} Reward Prediction".format(i))
+        plt.show()
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--det_trans", help="Fit the deterministic transition of AIS (AP2a)", action="store_true")
@@ -350,6 +366,7 @@ if __name__ == '__main__':
     if args.load_model:
         B, r, kmeans = load_model(nz, args.nb)
         policy, V = value_iteration(B, r, nz, nu)
+        plot_ais_reward(bt, kmeans, r, reward, action_indices, V, nz, nu)
         aR = []
         for i in range(50):
             aR.append(eval_performance(policy, V, POMDP, kmeans, P["start"], nu))
