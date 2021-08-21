@@ -9,19 +9,28 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--folder_name", type=str, default="cluster/parameter3/")
+    parser.add_argument("--folder_name", type=str, default="cluster/p2/")
     args = parser.parse_args()
 
-    nz_list = [50, 75, 100, 200, 250, 300, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000, 1100, 1500]
+    nz_list = [50, 75, 100, 200, 250, 300, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000, 1250, 1500]
     nb = 1000
+    seeds = [67, 88, 42, 157, 33, 77, 1024, 2048, 512, 32]
 
     avg_mean = []
     avg_std = []
     dt = []
     for nz in nz_list:
-        avg_mean.append(np.load(args.folder_name + "mean_{}_{}.npy".format(nz, nb))/10)
-        avg_std.append(np.load(args.folder_name + "std_{}_{}.npy".format(nz, nb))/np.sqrt(10))
-        dt.append(np.load(args.folder_name + "time_{}_{}.npy".format(nz, nb)))
+        # avg_mean.append(np.load(args.folder_name + "mean_{}_{}.npy".format(nz, nb))/10)
+        # avg_std.append(np.load(args.folder_name + "std_{}_{}.npy".format(nz, nb))/np.sqrt(10))
+        aR = []
+        time = []
+        for seed in seeds:
+            aR.append(np.load(args.folder_name + "aR_{}_{}.npy".format(nz, seed)))
+            time.append(np.load(args.folder_name + "time_{}_{}.npy".format(nz, seed)))
+        aR = np.array(aR)
+        avg_mean.append(np.mean(aR))
+        avg_std.append(np.std(aR))
+        dt.append(np.mean(time))
     colors = cm.rainbow(np.linspace(0, 1, len(nz_list)))
     plt.errorbar(nz_list, avg_mean, avg_std, linestyle='None', fmt='-o', ecolor=colors)
     # plt.xticks(nz_list)

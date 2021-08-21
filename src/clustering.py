@@ -12,7 +12,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
 from Experiments.GetTestParameters import *
 
 
-def process_belief(BO, B, num_samples, step_ind, nb, s, a, o, r, P_o_ba):
+def process_belief(BO, B, num_samples, step_ind, nb, s, a, r, rb):
     step_ind_copy = np.array(step_ind)
     # Remove the first belief before observation (useless)
     B.pop(0)
@@ -27,6 +27,7 @@ def process_belief(BO, B, num_samples, step_ind, nb, s, a, o, r, P_o_ba):
     s_next = []
     action_indices = []
     reward = []
+    reward_b = []
     if g_dim == 1:
         for i in range(num_samples):
             b = BO[i].sample_array(nb=nb)
@@ -44,13 +45,14 @@ def process_belief(BO, B, num_samples, step_ind, nb, s, a, o, r, P_o_ba):
                     s_next.append(s[i+1])
                     action_indices.append(int(a[i] - 1))
                     reward.append(r[i])
+                    reward_b.append(rb[i])
                 if i > 0 and i not in step_ind_copy:
                     b_next.append(bt[-1])
     else:
         pass
 
     return np.array(bt[:-1]), np.array(b_next), np.array(b_next_p), np.array(st[:-1]), np.array(s_next), \
-           np.array(action_indices), np.array(reward)
+           np.array(action_indices), np.array(reward), np.array(reward_b)
 
 
 def cluster_state(st, s_next, reward, action_indices, nz, nu):
@@ -259,7 +261,7 @@ def eval_performance(policy, V, POMDP, start, na, B_det=None, n_episodes=100, be
     return average_return
 
 
-def save_data(bt, b_next, bp, st, s_next, action_indices, reward, folder_name="data/sample_belief/"):
+def save_data(bt, b_next, bp, st, s_next, action_indices, reward, reward_b, folder_name="data/sample_belief/"):
     if not os.path.exists(folder_name):
         os.makedirs(folder_name)
     np.save(folder_name + "bt", bt)
@@ -269,6 +271,7 @@ def save_data(bt, b_next, bp, st, s_next, action_indices, reward, folder_name="d
     np.save(folder_name + "s_next", s_next)
     np.save(folder_name + "action_indices", action_indices)
     np.save(folder_name + "reward", reward)
+    np.save(folder_name + "reward_b", reward_b)
 
 
 def load_data(folder_name="data/sample_belief/"):
@@ -279,18 +282,20 @@ def load_data(folder_name="data/sample_belief/"):
     s_next = np.load(folder_name + "s_next.npy")
     action_indices = np.load(folder_name + "action_indices.npy")
     reward = np.load(folder_name + "reward.npy")
-    return bt, b_next, bp, st, s_next, action_indices, reward
+    reward_b = np.load(folder_name + "reward_b.npy")
+    return bt, b_next, bp, st, s_next, action_indices, reward, reward_b
 
 
-def save_model(B, r, kmeans, aR, dt, nz, nb, folder_name="cluster/"):
+def save_model(B, r, kmeans, aR, dt, nz, seed, folder_name="cluster/"):
     if not os.path.exists(folder_name):
         os.makedirs(folder_name)
-    np.save(folder_name + "B_{}_{}".format(nz, nb), B)
-    np.save(folder_name + "r_{}_{}".format(nz, nb), r)
-    np.save(folder_name + "mean_{}_{}".format(nz, nb), np.mean(np.array(aR)))
-    np.save(folder_name + "std_{}_{}".format(nz, nb), np.std(np.array(aR)))
-    np.save(folder_name + "time_{}_{}".format(nz, nb), dt)
-    with open(folder_name + "kmeans_{}_{}.pkl".format(nz, nb), "wb") as f:
+    np.save(folder_name + "B_{}_{}".format(nz, seed), B)
+    np.save(folder_name + "r_{}_{}".format(nz, seed), r)
+    np.save(folder_name + "aR_{}_{}".format(nz, seed), aR)
+    # np.save(folder_name + "mean_{}_{}".format(nz, seed), np.mean(np.array(aR)))
+    # np.save(folder_name + "std_{}_{}".format(nz, seed), np.std(np.array(aR)))
+    np.save(folder_name + "time_{}_{}".format(nz, seed), dt)
+    with open(folder_name + "kmeans_{}_{}.pkl".format(nz, seed), "wb") as f:
         pickle.dump(kmeans, f)
 
 
@@ -313,20 +318,25 @@ def plot_reward_value(kmeans, r, V, nu):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--det_trans", help="Fit the deterministic transition of AIS (AP2a)", action="store_true")
-    parser.add_argument("--pred_obs", help="Predict the observation (AP2b)", action="store_true")
+    parser.add_argument("--reward_expectation", help="Regression on ", action="store_true")
     parser.add_argument("--nz", help="Number of discrete AIS", type=int,
                         default=1000)
     parser.add_argument("--nb", help="Number of sample points to approximate belief distribution", type=int,
                         default=1000)
+    parser.add_argument("--seed", help="Random seed", type=int, default=67)
     parser.add_argument("--num_samples", help="Number of Training Samples", type=int, default=100000)
     parser.add_argument("--generate_data", help="Generate belief samples", action="store_true")
-    parser.add_argument("--folder_name", help="Folder name for data", type=str, default="data/100k/")
+    parser.add_argument("--data_folder", help="Folder name for data", type=str, default="data/p0/")
+    parser.add_argument("--result_folder", help="Folder name for data", type=str, default="cluster/p0/")
     args = parser.parse_args()
+
+    np.random.seed(args.seed)
+
+    result_folder = args.result_folder
 
     # Sample belief states data
     ncBelief = 10
-    POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
+    POMDP, P = GetTestParameters0(ncBelief=ncBelief)
     num_samples = args.num_samples
 
     nz = args.nz
@@ -336,19 +346,25 @@ if __name__ == '__main__':
     if args.generate_data:
         BO, BS, s, a, o, r, rb, P_o_ba, step_ind = POMDP.SampleBeliefs(P["start"], num_samples, P["dBelief"],
                                                                    P["stepsXtrial"], P["rMin"], P["rMax"],
-                                                                   obs_prob=args.pred_obs)
-        bt, b_next, bp, st, s_next, action_indices, reward = \
-            process_belief(BO, BS, num_samples, step_ind, args.nb, s, a, o, r, P_o_ba)
-        save_data(bt, b_next, bp, st, s_next, action_indices, reward, folder_name=args.folder_name)
+                                                                   obs_prob=False)
+        bt, b_next, bp, st, s_next, action_indices, reward, reward_b = \
+            process_belief(BO, BS, num_samples, step_ind, args.nb, s, a, r, rb)
+        save_data(bt, b_next, bp, st, s_next, action_indices, reward, reward_b, folder_name=args.data_folder)
     else:
-        bt, b_next, bp, st, s_next, action_indices, reward = load_data(folder_name=args.folder_name)
+        bt, b_next, bp, st, s_next, action_indices, reward, reward_b = load_data(folder_name=args.data_folder)
 
     start_time = time.time()
-    B, r, kmeans = cluster_belief(bt, bp, reward, action_indices, nz, nu)
+    if args.reward_expectation:
+        B, r, kmeans = cluster_belief(bt, bp, reward_b, action_indices, nz, nu)
+        result_folder = args.result_folder + "reward_expectation/"
+    else:
+        B, r, kmeans = cluster_belief(bt, bp, reward, action_indices, nz, nu)
+    # B, r, kmeans = cluster_state(st, s_next, reward, action_indices, nz, nu)
     policy, V = value_iteration(B, r, nz, nu)
+    # plot_reward_value(kmeans, r, V, nu)
     end_time = time.time()
     aR = []
     for i in range(50):
         aR.append(eval_performance(policy, V, POMDP, P["start"], nu))
     dt = end_time - start_time
-    save_model(B, r, kmeans, aR, dt, nz, args.nb, folder_name="cluster/")
+    save_model(B, r, kmeans, aR, dt, nz, args.seed, folder_name=result_folder)
