@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import argparse
 from sklearn.cluster import KMeans
+from sklearn.metrics import mean_squared_error
 import copy
 import cvxpy as cp
 import time
@@ -98,6 +99,25 @@ def cluster_belief(bt, bp, reward, action_indices, nz, nu):
         rT = np.linalg.lstsq(z1.T, reward[ind].T)
         r.append(rT[0].T)
     return np.array(B), np.array(r), kmeans
+
+
+def calculate_loss(bt, bp, reward, action_indices, nz, nu, B, r, kmeans):
+    tl = kmeans.predict(bt)
+    X_next = bp
+    pl = kmeans.predict(X_next)
+    loss_B = 0
+    loss_r = 0
+    for i in range(nu):
+        ind = (action_indices == i)
+        l1 = tl[ind]
+        z1 = np.zeros((nz, l1.size))
+        z1[l1, np.arange(l1.size)] = 1
+        l2 = pl[ind]
+        z2 = np.zeros((nz, l2.size))
+        z2[l2, np.arange(l2.size)] = 1
+        loss_B += mean_squared_error(B[i]@z1, z2)
+        loss_r += mean_squared_error(r[i] @ z1, reward[ind])
+    return loss_B + loss_r
 
 
 def solve_B(z1, z2, nz):
@@ -299,9 +319,12 @@ def save_model(B, r, kmeans, aR, dt, nz, seed, folder_name="cluster/"):
         pickle.dump(kmeans, f)
 
 
-def load_model(nz, nb, folder_name="cluster/"):
-    folder_name = "model/" + "100k/" + "scheduler/"
-    return B, kmeans
+def load_model(nz, seed, folder_name):
+    B = np.load(folder_name + "B_{}_{}.npy".format(nz, seed))
+    r = np.load(folder_name + "r_{}_{}.npy".format(nz, seed))
+    with open(folder_name + "kmeans_{}_{}.pkl".format(nz, seed), "rb") as f:
+        kmeans = pickle.load(f)
+    return B, r, kmeans
 
 
 def plot_reward_value(kmeans, r, V, nu):
