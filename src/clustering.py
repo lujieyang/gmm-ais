@@ -306,13 +306,13 @@ def load_data(folder_name="data/sample_belief/"):
     return bt, b_next, bp, st, s_next, action_indices, reward, reward_b
 
 
-def save_model(B, r, kmeans, aR, dt, nz, seed, folder_name="cluster/"):
+def save_model(B, r, kmeans, aR, dt, l, nz, seed, folder_name="cluster/"):
     if not os.path.exists(folder_name):
         os.makedirs(folder_name)
     np.save(folder_name + "B_{}_{}".format(nz, seed), B)
     np.save(folder_name + "r_{}_{}".format(nz, seed), r)
     np.save(folder_name + "aR_{}_{}".format(nz, seed), aR)
-    # np.save(folder_name + "mean_{}_{}".format(nz, seed), np.mean(np.array(aR)))
+    np.save(folder_name + "l_{}_{}".format(nz, seed), l)
     # np.save(folder_name + "std_{}_{}".format(nz, seed), np.std(np.array(aR)))
     np.save(folder_name + "time_{}_{}".format(nz, seed), dt)
     with open(folder_name + "kmeans_{}_{}.pkl".format(nz, seed), "wb") as f:
@@ -387,7 +387,8 @@ if __name__ == '__main__':
     # plot_reward_value(kmeans, r, V, nu)
     end_time = time.time()
     aR = []
-    for i in range(50):
+    for i in range(30):
         aR.append(eval_performance(policy, V, POMDP, P["start"], nu))
     dt = end_time - start_time
-    save_model(B, r, kmeans, aR, dt, nz, args.seed, folder_name=result_folder)
+    l = calculate_loss(bt, bp, reward, action_indices, nz, nu, B, r, kmeans)
+    save_model(B, r, kmeans, aR, dt, l, nz, args.seed, folder_name=result_folder)
