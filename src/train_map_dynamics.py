@@ -8,7 +8,7 @@ from torch.optim.lr_scheduler import StepLR
 from torch.utils.tensorboard import SummaryWriter
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
-from Experiments.GetTestParameters import GetTest1Parameters
+from Experiments.GetTestParameters import *
 
 
 def action_obs_1d_ind(nu, no, actions, obs):
@@ -218,7 +218,7 @@ if __name__ == '__main__':
 
     # Sample belief states data
     ncBelief = 10
-    POMDP, P = GetTest1Parameters(ncBelief=ncBelief)
+    POMDP, P = GetTestParameters0(ncBelief=ncBelief)
     num_samples = args.num_samples
     batch_size = args.batch_size
 

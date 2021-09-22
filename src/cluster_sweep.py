@@ -21,7 +21,7 @@ if __name__ == '__main__':
     nz_list = [50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200]
     nb = 1000
     nu = 3
-    seeds = [67, 88, 42, 157, 33, 77, 1024]  # , 2048, 512, 32]
+    seeds = [67, 88, 42, 157, 33, 77, 1024, 2048, 512, 32]
 
     if args.load_data:
         bt, b_next, bp, st, s_next, action_indices, reward, reward_b = load_data(folder_name=args.data_folder)
@@ -64,7 +64,7 @@ if __name__ == '__main__':
     plt.ylabel('Average Return', fontsize=20)
     # plt.title("Performance vs DAIS Dimension")
     plt.savefig("cn_return")
-    # plt.show()
+    plt.show()
 
     loss_mean = np.array(loss_mean)
     loss_std = np.array(loss_std)
@@ -77,7 +77,7 @@ if __name__ == '__main__':
     plt.ylabel('DAIS fitting loss', fontsize=20)
     # plt.title("Performance vs DAIS Dimension")
     plt.savefig("cn_loss")
-    # plt.show()
+    plt.show()
 
     file_name = args.folder_name + "performance.csv"
 
