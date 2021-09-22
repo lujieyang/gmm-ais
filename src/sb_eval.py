@@ -1,0 +1,72 @@
+import os
+import torch
+import argparse
+import numpy as np
+
+import gym
+import gym_corridor
+
+from stable_baselines3 import PPO, A2C
+from stable_baselines3.common.utils import obs_as_tensor
+
+def eval(args, seed, n_episodes=100, gamma=0.95):
+    env = gym.make("CorridorNavigation-v0")
+    if args.A2C:
+        model = A2C.load("sample_b_A2C_{}".format(seed), env=env)
+    else:
+        model = PPO.load("sample_b_PPO_{}".format(seed), env=env)
+
+    returns = []
+    for _ in range(n_episodes):
+        obs = env.reset()
+        reward_episode = []
+
+        for t in range(30):
+
+            # select action with policy
+            obs_tensor = obs_as_tensor(obs, device)
+            actions, _, _ = model.policy.forward(obs_tensor.view(1,env.observation_dim))
+            actions = actions.cpu().numpy()
+            obs, reward, _, _ = env.step(actions)
+
+            reward_episode.append(reward)
+
+        rets = []
+        R = 0
+        for i, r in enumerate(reward_episode[::-1]):
+            R = r + gamma * R
+            rets.insert(0, R)
+        returns.append(rets[0])
+
+    print("\n")
+    average_return = np.mean(returns)
+    print("Average reward: ", average_return)
+    print("Reward std: ", np.std(returns))
+    return returns
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--seed", type=int, help="Random seed of the experiment", default=42)
+    parser.add_argument("--A2C", action="store_true")
+    parser.add_argument("--group",action="store_true")
+    args = parser.parse_args()
+    # set device to cpu or cuda
+    device = torch.device('cpu')
+
+    if(torch.cuda.is_available()):
+        device = torch.device('cuda:0')
+        torch.cuda.empty_cache()
+
+    if args.group:
+        returns = []
+        seed = [67, 88, 42, 10, 72, 77, 1024, 2048, 512, 32]
+        for s in seed:
+            returns.append(eval(args, s))
+        returns = np.array(returns)
+        print("Return Mean: ", np.mean(returns))
+        print("Return std: ", np.std(returns))
+    else:
+        eval(args, args.seed)
+
+    
