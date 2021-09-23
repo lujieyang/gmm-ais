@@ -26,9 +26,7 @@ def eval(args, seed, n_episodes=100, gamma=0.95):
         for t in range(30):
 
             # select action with policy
-            obs_tensor = obs_as_tensor(obs, device)
-            actions, _, _ = model.policy.forward(obs_tensor.view(1,env.observation_dim))
-            actions = actions.cpu().numpy()
+            actions, _ = model.predict(obs)
             obs, reward, _, _ = env.step(actions)
 
             reward_episode.append(reward)
@@ -62,7 +60,7 @@ if __name__ == '__main__':
 
     if args.group:
         returns = []
-        seed = [67, 88, 42, 10, 72, 77, 1024, 2048, 512, 32]
+        seed = [1, 2, 3, 4, 5, 6, 42, 10, 1024, 32]
         for s in seed:
             returns.append(eval(args, s))
         returns = np.array(returns)

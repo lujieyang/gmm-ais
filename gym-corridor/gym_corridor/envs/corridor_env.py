@@ -20,6 +20,7 @@ class CorridorEnv(gym.Env):
     self.observation_space = spaces.Box(low=-22, high=22,shape=(self.observation_dim,))
     self.step_num = 0
     self.step_ind = 30
+    self.num_envs = 1
 
   def step(self, action):
     done = False
