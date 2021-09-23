@@ -42,7 +42,6 @@ def eval(seed, n_episodes=100, gamma=0.95):
 
     returns = []
     for n_eps in range(n_episodes):
-        print(".", end=" ")
 
         b = copy.deepcopy(start)
         s = S.Crop(b.rand())
@@ -70,12 +69,13 @@ def eval(seed, n_episodes=100, gamma=0.95):
     print("\n")
     average_return = np.mean(returns)
     print("Average reward: ", average_return)
-    return average_return
+    return returns
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, help="Random seed of the experiment", default=42)
+    parser.add_argument("--group",action="store_true")
     args = parser.parse_args()
     # set device to cpu or cuda
     device = torch.device('cpu')
@@ -84,4 +84,13 @@ if __name__ == '__main__':
         device = torch.device('cuda:0')
         torch.cuda.empty_cache()
 
-    eval(args.seed)
+    if args.group:
+        returns = []
+        seed = [67, 88, 42, 10, 72, 77, 1024, 2048, 512, 32]
+        for s in seed:
+            returns.append(eval(s))
+        returns = np.array(returns)
+        print("Return Mean: ", np.mean(returns))
+        print("Return std: ", np.std(returns))
+    else:
+        eval(args.seed)
