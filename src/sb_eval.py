@@ -11,10 +11,12 @@ from stable_baselines3.common.utils import obs_as_tensor
 
 def eval(args, seed, n_episodes=100, gamma=0.95):
     env = gym.make("CorridorNavigation-v0")
+    model_dir = "model/"
+    print("seed: ", seed)
     if args.A2C:
-        model = A2C.load("sample_b_A2C_{}".format(seed), env=env)
+        model = A2C.load(model_dir+"sample_b_A2C_{}".format(seed), env=env)
     else:
-        model = PPO.load("sample_b_PPO_{}".format(seed), env=env)
+        model = PPO.load(model_dir+"sample_b_PPO_{}".format(seed), env=env)
 
     returns = []
     for _ in range(n_episodes):
