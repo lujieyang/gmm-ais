@@ -117,7 +117,7 @@ def calculate_loss(bt, bp, reward, action_indices, nz, nu, B, r, kmeans):
         z2[l2, np.arange(l2.size)] = 1
         loss_B += mean_squared_error(B[i]@z1, z2)
         loss_r += mean_squared_error(r[i] @ z1, reward[ind])
-    return loss_B + loss_r
+    return loss_B, loss_r
 
 
 def solve_B(z1, z2, nz):
@@ -306,13 +306,14 @@ def load_data(folder_name="data/sample_belief/"):
     return bt, b_next, bp, st, s_next, action_indices, reward, reward_b
 
 
-def save_model(B, r, kmeans, aR, dt, l, nz, seed, folder_name="cluster/"):
+def save_model(B, r, kmeans, aR, dt, lB, lr, nz, seed, folder_name="cluster/"):
     if not os.path.exists(folder_name):
         os.makedirs(folder_name)
     np.save(folder_name + "B_{}_{}".format(nz, seed), B)
     np.save(folder_name + "r_{}_{}".format(nz, seed), r)
     np.save(folder_name + "aR_{}_{}".format(nz, seed), aR)
-    np.save(folder_name + "l_{}_{}".format(nz, seed), l)
+    np.save(folder_name + "lB_{}_{}".format(nz, seed), lB)
+    np.save(folder_name + "lB_{}_{}".format(nz, seed), lr)
     # np.save(folder_name + "std_{}_{}".format(nz, seed), np.std(np.array(aR)))
     np.save(folder_name + "time_{}_{}".format(nz, seed), dt)
     with open(folder_name + "kmeans_{}_{}.pkl".format(nz, seed), "wb") as f:
@@ -390,5 +391,5 @@ if __name__ == '__main__':
     for i in range(30):
         aR.append(eval_performance(policy, V, POMDP, P["start"], nu))
     dt = end_time - start_time
-    l = calculate_loss(bt, bp, reward, action_indices, nz, nu, B, r, kmeans)
-    save_model(B, r, kmeans, aR, dt, l, nz, args.seed, folder_name=result_folder)
+    lB, lr = calculate_loss(bt, bp, reward, action_indices, nz, nu, B, r, kmeans)
+    save_model(B, r, kmeans, aR, dt, lB, lr, nz, args.seed, folder_name=result_folder)
