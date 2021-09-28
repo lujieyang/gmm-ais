@@ -2,12 +2,29 @@ import os
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 import csv
 import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
 from clustering import *
+
+def plot_data_median(x, data, color, label):
+    m, lo, hi = np.median(data, 1), \
+            np.quantile(data, 0.25, 1), \
+            np.quantile(data, 0.75, 1)
+    plt.plot(x, m, '-', color=color, alpha=0.8, label=label)
+    plt.fill_between(x, lo, hi, color=color, alpha=0.2)
+
+def get_data_median(x, data, color, label):
+    m, lo, hi = np.median(data), \
+                np.quantile(data, 0.25), \
+                np.quantile(data, 0.75)
+    nx = len(x)
+    m = np.ones(nx)*m
+    lo = np.ones(nx) * lo
+    hi = np.ones(nx) * hi
+    plt.plot(x, m, '--', color=color, alpha=0.8, label=label)
+    plt.fill_between(x, lo, hi, color=color, alpha=0.2)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -18,7 +35,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # nz_list = [50, 75, 100, 200, 250, 300, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000, 1250, 1500]
-    nz_list = [50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200]
+    nz_list = range(50, 101)
     nb = 1000
     nu = 3
     seeds = [67, 88, 42, 157, 33, 77, 1024, 2048, 512, 32]
@@ -29,52 +46,54 @@ if __name__ == '__main__':
     avg_mean = []
     avg_std = []
     dt = []
-    loss_mean = []
-    loss_std = []
+    loss_B = []
+    loss_r = []
     for nz in nz_list:
-        # avg_mean.append(np.load(args.folder_name + "mean_{}_{}.npy".format(nz, nb))/10)
-        # avg_std.append(np.load(args.folder_name + "std_{}_{}.npy".format(nz, nb))/np.sqrt(10))
         aR = []
         time = []
-        loss = []
+        lB = []
+        lr = []
         for seed in seeds:
             aR.append(np.load(args.folder_name + "aR_{}_{}.npy".format(nz, seed)) / 10)
             if args.calculate_loss:
                 B, r, kmeans = load_model(nz, seed, args.folder_name)
                 l = calculate_loss(bt, bp, reward, action_indices, nz, nu, B, r, kmeans)
             else:
-                loss.append(np.load(args.folder_name + "l_{}_{}.npy".format(nz, seed)))
+                lB.append(np.load(args.folder_name + "lB_{}_{}.npy".format(nz, seed)))
+                lr.append(np.load(args.folder_name + "lr_{}_{}.npy".format(nz, seed)))
             time.append(np.load(args.folder_name + "time_{}_{}.npy".format(nz, seed)) / np.sqrt(10))
         aR = np.array(aR)
-        avg_mean.append(np.mean(aR))
+        avg_mean.append(np.mean(aR, 1))
         avg_std.append(np.std(aR))
         dt.append(np.mean(time))
-        # if args.calculate_loss:
-        loss_mean.append(np.mean(loss))
-        loss_std.append(np.std(loss))
-    colors = cm.rainbow(np.linspace(0, 1, len(nz_list)))
+        loss_B.append(np.mean(lB))
+        loss_r.append(np.std(lr))
     avg_mean = np.array(avg_mean)
-    avg_std = np.array(avg_std)
-    plt.plot(nz_list, avg_mean)
-    plt.fill_between(nz_list, avg_mean + avg_std, avg_mean - avg_std, alpha=0.5)
+    PPO_return = np.mean(np.load("model/PPO_return.npy"), 1)
+    A2C_return = np.mean(np.load("model/A2C_return.npy"), 1)
+    plot_data_median(nz_list, avg_mean, None, "DAIS")
+    get_data_median(nz_list, PPO_return, "orange", "PPO")
+    get_data_median(nz_list, A2C_return, "green", "A2C")
     # plt.errorbar(nz_list, avg_mean, avg_std, linestyle='None', fmt='-o', ecolor=colors)
     # plt.xticks(nz_list)
-    # plt.legend(loc="best")
+    plt.legend(loc="best", fontsize=16)
     plt.xlabel('DAIS Dimension', fontsize=20)
     plt.ylabel('Average Return', fontsize=20)
     # plt.title("Performance vs DAIS Dimension")
     plt.savefig("cn_return")
     plt.show()
 
-    loss_mean = np.array(loss_mean)
-    loss_std = np.array(loss_std)
-    plt.plot(nz_list, loss_mean)
-    plt.fill_between(nz_list, loss_mean + loss_std, loss_mean - loss_std, alpha=0.5)
+    loss_B = np.array(loss_B)
+    loss_r = np.array(loss_r)
+    plt.plot(nz_list, loss_r, label="r prediciton")
+    plt.plot(nz_list, loss_B, label="B prediciton")
+    # plt.fill_between(nz_list, loss_mean + loss_std, loss_mean - loss_std, alpha=0.5)
     # plt.errorbar(nz_list, avg_mean, avg_std, linestyle='None', fmt='-o', ecolor=colors)
     # plt.xticks(nz_list)
     # plt.legend(loc="best")
     plt.xlabel('DAIS Dimension', fontsize=20)
     plt.ylabel('DAIS fitting loss', fontsize=20)
+    plt.legend(loc="best", fontsize=16)
     # plt.title("Performance vs DAIS Dimension")
     plt.savefig("cn_loss")
     plt.show()
@@ -88,8 +107,8 @@ if __name__ == '__main__':
         csvwriter.writerow(avg_mean)
         csvwriter.writerow(avg_std)
         csvwriter.writerow(dt)
-        csvwriter.writerow(loss_mean)
-        csvwriter.writerow(loss_std)
+        csvwriter.writerow(loss_B)
+        csvwriter.writerow(loss_r)
 
 # Parameter 0
 t = np.arange(25) * 100

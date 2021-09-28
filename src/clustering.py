@@ -313,7 +313,7 @@ def save_model(B, r, kmeans, aR, dt, lB, lr, nz, seed, folder_name="cluster/"):
     np.save(folder_name + "r_{}_{}".format(nz, seed), r)
     np.save(folder_name + "aR_{}_{}".format(nz, seed), aR)
     np.save(folder_name + "lB_{}_{}".format(nz, seed), lB)
-    np.save(folder_name + "lB_{}_{}".format(nz, seed), lr)
+    np.save(folder_name + "lr_{}_{}".format(nz, seed), lr)
     # np.save(folder_name + "std_{}_{}".format(nz, seed), np.std(np.array(aR)))
     np.save(folder_name + "time_{}_{}".format(nz, seed), dt)
     with open(folder_name + "kmeans_{}_{}.pkl".format(nz, seed), "wb") as f:
