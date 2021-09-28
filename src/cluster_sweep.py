@@ -35,10 +35,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # nz_list = [50, 75, 100, 200, 250, 300, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000, 1250, 1500]
-    nz_list = range(50, 101)
+    nz_list = range(50, 91)
     nb = 1000
     nu = 3
-    seeds = [67, 88, 42, 157, 33, 77, 1024, 2048, 512, 32]
+    seeds = [67, 88, 42, 157, 33, 77, 1024, 2048, 512] #, 32]
 
     if args.load_data:
         bt, b_next, bp, st, s_next, action_indices, reward, reward_b = load_data(folder_name=args.data_folder)
@@ -49,25 +49,26 @@ if __name__ == '__main__':
     loss_B = []
     loss_r = []
     for nz in nz_list:
+        print(nz)
         aR = []
         time = []
         lB = []
         lr = []
         for seed in seeds:
-            aR.append(np.load(args.folder_name + "aR_{}_{}.npy".format(nz, seed)) / 10)
+            aR.append(np.load(args.folder_name + "aR_{}_{}.npy".format(nz, seed)))
             if args.calculate_loss:
                 B, r, kmeans = load_model(nz, seed, args.folder_name)
                 l = calculate_loss(bt, bp, reward, action_indices, nz, nu, B, r, kmeans)
             else:
                 lB.append(np.load(args.folder_name + "lB_{}_{}.npy".format(nz, seed)))
                 lr.append(np.load(args.folder_name + "lr_{}_{}.npy".format(nz, seed)))
-            time.append(np.load(args.folder_name + "time_{}_{}.npy".format(nz, seed)) / np.sqrt(10))
+            time.append(np.load(args.folder_name + "time_{}_{}.npy".format(nz, seed)))
         aR = np.array(aR)
         avg_mean.append(np.mean(aR, 1))
         avg_std.append(np.std(aR))
         dt.append(np.mean(time))
         loss_B.append(np.mean(lB))
-        loss_r.append(np.std(lr))
+        loss_r.append(np.mean(lr))
     avg_mean = np.array(avg_mean)
     PPO_return = np.mean(np.load("model/PPO_return.npy"), 1)
     A2C_return = np.mean(np.load("model/A2C_return.npy"), 1)
