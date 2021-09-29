@@ -60,12 +60,11 @@ if __name__ == '__main__':
 
     if args.group:
         returns = []
-        seed = [1, 2, 3, 4, 5, 6, 42, 10, 1024, 32]
+        seed = [2048, 67, 88, 72, 77, 512, 42, 10, 1024, 32] #[1, 2, 3, 4, 5, 6, 42, 10, 1024, 32]
         for s in seed:
             returns.append(eval(args, s))
         returns = np.array(returns)
-        print("Return Mean: ", np.mean(returns))
-        print("Return std: ", np.std(returns))
+        np.save("model/PPO_return", returns)
     else:
         eval(args, args.seed)
 

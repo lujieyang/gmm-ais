@@ -36,9 +36,9 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
         md = minBeliefDist + 1
         B = []
         BO = []
+        B_next = []
         s_s = []
         a_s = []
-        o_s = []
         r_s = []
         rb_s = []
         P_o_ba_s = []
@@ -53,7 +53,7 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
 
             a = A.rand()
 
-            s, b, o, r, rb, bn, P_o_ba  = self.SimulationStep(b, s, a, obs_prob=obs_prob)
+            s, b, b_next, r, rb, bn, P_o_ba  = self.SimulationStep(b, s, a, obs_prob=obs_prob)
 
             if (k > 1) and (minBeliefDist > 0):
                 md = b.Distance(BO[k-1])
@@ -62,9 +62,9 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
                 k += 1
                 BO.append(b)
                 B.append(bn)
+                B_next.append(b_next)
                 s_s.append(s)
                 a_s.append(a)
-                o_s.append(o)
                 r_s.append(r)
                 rb_s.append(rb)
                 P_o_ba_s.append(P_o_ba)
@@ -73,26 +73,31 @@ class CS_DO_DA_POMDP(CS_DO_POMDP, CS_DA_ActionModel, CS_DO_ObsModel, CS_DA_Rewar
                     print("\n")
         print("\n")
 
-        return BO, B, s_s, a_s, o_s, r_s, rb_s, P_o_ba_s, step_ind
+        return BO, B, B_next, s_s, a_s, r_s, rb_s, P_o_ba_s, step_ind
 
     def SimulationStep(self, b, s, a, obs_prob=False):
         S = self.S
 
         r = self.Reward(a, s)
-        rb = b.Expectation(self.r[int(a - 1)] * 10)
+        rb = b.Expectation(self.r[int(a - 1)])
 
         s, b = self.Prediction(s, b, a, S)
-        bn = copy.deepcopy(b)
+        bn = copy.deepcopy(b)  # p(s'|b,a) before observation correction
         po = self.GetObsModelFixedS(s)
 
         o = RandVector(po)
         b = self.Update(b, o, S)
 
+        b_next = []
+        no = len(self.p)
+        for k in range(no):
+            b_next.append(self.Update(copy.deepcopy(bn), k, S))
+
         if obs_prob:
             P_o_ba = self.get_observation_conditional_prob(bn, S)
         else:
             P_o_ba = 0
-        return s, b, o, r, rb, bn, P_o_ba
+        return s, b, b_next, r, rb, bn, P_o_ba
 
     def get_observation_conditional_prob(self, b, Sp):
         no = len(self.p)
