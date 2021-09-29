@@ -30,7 +30,7 @@ if args.A2C:
     model.learn(total_timesteps=int(5e4))
     model.save(model_dir + "sample_b_A2C_{}".format(args.seed))
 else:
-    model = PPO("MlpPolicy", env, verbose=1, seed=args.seed, n_steps=8192)
+    model = PPO("MlpPolicy", env, verbose=1, seed=args.seed)
     model.learn(total_timesteps=int(2.5e5))
     model.save(model_dir + "sample_b_PPO_{}".format(args.seed))
 
