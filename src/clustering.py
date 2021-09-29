@@ -369,8 +369,13 @@ if __name__ == '__main__':
     parser.add_argument("--seed", help="Random seed", type=int, default=67)
     parser.add_argument("--num_samples", help="Number of Training Samples", type=int, default=100000)
     parser.add_argument("--generate_data", help="Generate belief samples", action="store_true")
+<<<<<<< HEAD
     parser.add_argument("--data_folder", help="Folder name for data", type=str, default="data/p/")
     parser.add_argument("--result_folder", help="Folder name for data", type=str, default="cluster/p/")
+=======
+    parser.add_argument("--data_folder", help="Folder name for data", type=str, default="data/test/")
+    parser.add_argument("--result_folder", help="Folder name for data", type=str, default="cluster/test/")
+>>>>>>> 8127219e4850b6ff133f31f546a65e1c955302b5
     args = parser.parse_args()
 
     np.random.seed(args.seed)
