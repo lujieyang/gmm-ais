@@ -35,10 +35,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # nz_list = [50, 75, 100, 200, 250, 300, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000, 1250, 1500]
-    nz_list = range(50, 91)
+    nz_list = range(30, 101, 5)
     nb = 1000
     nu = 3
-    seeds = [67, 88, 42, 157, 33, 77, 1024, 2048, 512] #, 32]
+    seeds = [67, 88, 42, 157, 33, 77, 1024, 2048, 512, 32]
 
     if args.load_data:
         bt, b_next, bp, st, s_next, action_indices, reward, reward_b = load_data(folder_name=args.data_folder)
@@ -75,29 +75,24 @@ if __name__ == '__main__':
     plot_data_median(nz_list, avg_mean, None, "DAIS")
     get_data_median(nz_list, PPO_return, "orange", "PPO")
     get_data_median(nz_list, A2C_return, "green", "A2C")
-    # plt.errorbar(nz_list, avg_mean, avg_std, linestyle='None', fmt='-o', ecolor=colors)
-    # plt.xticks(nz_list)
     plt.legend(loc="best", fontsize=16)
     plt.xlabel('DAIS Dimension', fontsize=20)
     plt.ylabel('Average Return', fontsize=20)
     # plt.title("Performance vs DAIS Dimension")
     plt.savefig("cn_return")
     plt.show()
+    plt.close()
 
     loss_B = np.array(loss_B)
     loss_r = np.array(loss_r)
-    plt.plot(nz_list, loss_r, label="r prediciton")
-    plt.plot(nz_list, loss_B, label="B prediciton")
-    # plt.fill_between(nz_list, loss_mean + loss_std, loss_mean - loss_std, alpha=0.5)
-    # plt.errorbar(nz_list, avg_mean, avg_std, linestyle='None', fmt='-o', ecolor=colors)
-    # plt.xticks(nz_list)
-    # plt.legend(loc="best")
+    plt.plot(nz_list, loss_r + loss_B)
     plt.xlabel('DAIS Dimension', fontsize=20)
     plt.ylabel('DAIS fitting loss', fontsize=20)
-    plt.legend(loc="best", fontsize=16)
+    # plt.legend(loc="best", fontsize=16)
     # plt.title("Performance vs DAIS Dimension")
     plt.savefig("cn_loss")
     plt.show()
+    plt.close()
 
     file_name = args.folder_name + "performance.csv"
 
@@ -121,8 +116,10 @@ pbvi_std = np.array(
     [1.6919, 0.8076, 0.8656, 0.5467, 0.3952, 3.4997, 2.4044, 0.1766, 0.2895, 0.1402, 0.2911, 0.3225, 0.1368, 0.1237,
      0.1587, 0.1504,
      0.0774, 0.1080, 0.1045, 0.1096, 0.1241, 0.1234, 0.1256, 0.1135, 0.1211])
-# plt.errorbar(t, pbvi_mean, pbvi_std, linestyle='-', fmt='-o', ms=4)
-plt.errorbar(353.408266564284, 1.54554443034196, 0.0823720658208118, fmt='-o', ms=4, label="DAIS")
+perf = np.mean(avg_mean,1)
+ind = np.argmax(perf)
+plt.errorbar(dt[ind], perf[ind], avg_std[ind], fmt='-o', ms=4, label="DAIS")
+# plt.errorbar(353.408266564284, 1.54554443034196, 0.0823720658208118, fmt='-o', ms=4)
 plt.plot(t, pbvi_mean, label="CPBVI")
 plt.fill_between(t, pbvi_mean + pbvi_std, pbvi_mean - pbvi_std, alpha=0.5, color="orange")
 # plt.legend(["CPBVI", "DAIS"], loc="best", fontsize=12)
@@ -132,28 +129,29 @@ plt.ylabel("Average Return", fontsize=20)
 # plt.title("DAIS vs CPBVI")
 plt.savefig("cn_compare")
 plt.show()
+plt.close()
 
 # Parameter 1
-t = np.arange(50) * 100
-pbvi_mean = [-6.5124, -7.3852, -9.1995, 3.0874, 8.7093, 8.0920, 6.7244, 7.9636, 7.5937, 7.8296, 5.5094, 6.0144, 7.9034,
-             5.3638, 6.2347, 5.6153,
-             5.6345, 5.1589, 5.6257, 5.3716, 4.4087, 4.0815, 3.8421, 4.0065, 3.7169, 4.5157, 3.0798, 3.8588, 3.4644,
-             3.1697, 2.0389, 1.7265,
-             2.4602, 2.2082, 1.6639, 1.4183, 1.3738, 1.9850, 0.7102, 0.7353, 1.3020, 0.8098, 1.1461, 1.2846, 1.0731,
-             0.8385, 0.4301, 0.6798,
-             1.1020, 1.0072]
-pbvi_std = [4.5398, 2.1067, 3.6101, 7.1251, 1.8738, 1.2462, 1.6035, 1.1512, 1.6632, 1.7414, 1.8321, 2.0051, 1.8162,
-            2.0398, 1.9404, 1.8895,
-            1.6998, 1.8523, 1.9764, 1.9645, 1.6706, 1.6495, 2.0018, 2.2856, 2.0495, 2.3703, 2.6238, 2.1556, 2.5150,
-            2.2780, 1.2113, 1.7328,
-            2.5483, 1.7598, 1.5943, 1.0190, 1.6813, 0.8433, 0.8609, 0.6761, 0.9895, 0.7502, 0.7098, 1.2293, 1.1573,
-            0.9617, 0.6674, 0.9300,
-            1.7632, 1.1993]
-plt.errorbar(t, pbvi_mean, pbvi_std, linestyle='-', fmt='-o', ms=4)
-ind = np.argmax(avg_mean)
-plt.errorbar(dt[ind], avg_mean[ind], avg_std[ind], fmt='-o', ms=4)
-plt.legend(["CPBVI", "DAIS"], loc="best")
-plt.xlabel("time(s)")
-plt.ylabel("Average Return")
-plt.title("DAIS vs CPBVI")
-plt.show()
+# t = np.arange(50) * 100
+# pbvi_mean = [-6.5124, -7.3852, -9.1995, 3.0874, 8.7093, 8.0920, 6.7244, 7.9636, 7.5937, 7.8296, 5.5094, 6.0144, 7.9034,
+#              5.3638, 6.2347, 5.6153,
+#              5.6345, 5.1589, 5.6257, 5.3716, 4.4087, 4.0815, 3.8421, 4.0065, 3.7169, 4.5157, 3.0798, 3.8588, 3.4644,
+#              3.1697, 2.0389, 1.7265,
+#              2.4602, 2.2082, 1.6639, 1.4183, 1.3738, 1.9850, 0.7102, 0.7353, 1.3020, 0.8098, 1.1461, 1.2846, 1.0731,
+#              0.8385, 0.4301, 0.6798,
+#              1.1020, 1.0072]
+# pbvi_std = [4.5398, 2.1067, 3.6101, 7.1251, 1.8738, 1.2462, 1.6035, 1.1512, 1.6632, 1.7414, 1.8321, 2.0051, 1.8162,
+#             2.0398, 1.9404, 1.8895,
+#             1.6998, 1.8523, 1.9764, 1.9645, 1.6706, 1.6495, 2.0018, 2.2856, 2.0495, 2.3703, 2.6238, 2.1556, 2.5150,
+#             2.2780, 1.2113, 1.7328,
+#             2.5483, 1.7598, 1.5943, 1.0190, 1.6813, 0.8433, 0.8609, 0.6761, 0.9895, 0.7502, 0.7098, 1.2293, 1.1573,
+#             0.9617, 0.6674, 0.9300,
+#             1.7632, 1.1993]
+# plt.errorbar(t, pbvi_mean, pbvi_std, linestyle='-', fmt='-o', ms=4)
+# ind = np.argmax(perf)
+# plt.errorbar(dt[ind], perf[ind], np.mean(avg_std,1)[ind], fmt='-o', ms=4)
+# plt.legend(["CPBVI", "DAIS"], loc="best")
+# plt.xlabel("time(s)")
+# plt.ylabel("Average Return")
+# plt.title("DAIS vs CPBVI")
+# plt.show()
