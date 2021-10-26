@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import argparse
 from sklearn.cluster import KMeans
+from sklearn.preprocessing import minmax_scale
 from sklearn.metrics import mean_squared_error
 import copy
 import cvxpy as cp
@@ -79,13 +80,17 @@ def cluster_state(st, s_next, reward, action_indices, nz, nu):
     return np.array(B), np.array(r), kmeans
 
 
-def cluster_belief(bt, bp, reward, action_indices, nz, nu):
+def cluster_belief(bt, bp, reward, action_indices, nz, nu, lmbda=0.8):
+    # Normalize reward data
+    reward = minmax_scale(reward,feature_range=(0, 1), axis=0, copy=True)
     X = bt
     kmeans = KMeans(n_clusters=nz, random_state=0).fit(X)
     X_next = bp
     pl = kmeans.predict(X_next)
     B = []
     r = []
+    delta = []
+    epsilon = []
     for i in range(nu):
         ind = (action_indices == i)
         l1 = kmeans.labels_[ind]
@@ -96,10 +101,22 @@ def cluster_belief(bt, bp, reward, action_indices, nz, nu):
         z2[l2, np.arange(l2.size)] = 1
         B0 = solve_B(z1, z2, nz)
         B.append(B0)
+        delta.append(calculate_error_table(nz, z1, z2, B0, l1))
         rT = np.linalg.lstsq(z1.T, reward[ind].T)
         r.append(rT[0].T)
-    return np.array(B), np.array(r), kmeans
+        epsilon.append(calculate_error_table(nz, z1, reward[ind], r[-1], l1))
+    u = lmbda * np.array(epsilon) + (1-lmbda) * np.array(delta)
+    return np.array(B), np.array(r), kmeans, u
 
+
+def calculate_error_table(nz, z1, z2, B, l1):
+    E = np.abs(B@z1-z2)
+    if len(B.shape) > 1:
+        E = np.sum(E,axis=0)
+    table = np.zeros(nz)
+    for i in range(nz):
+        table[i] = np.mean(E[l1 == i])
+    return table
 
 def calculate_loss(bt, bp, reward, action_indices, nz, nu, B, r, kmeans):
     tl = kmeans.predict(bt)
@@ -344,14 +361,15 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--reward_expectation", help="Regression on ", action="store_true")
     parser.add_argument("--nz", help="Number of discrete AIS", type=int,
-                        default=1000)
+                        default=100)
+    parser.add_argument("--lmda", help="Weighting factor between", type=float, default=0.9)
     parser.add_argument("--nb", help="Number of sample points to approximate belief distribution", type=int,
                         default=1000)
     parser.add_argument("--seed", help="Random seed", type=int, default=67)
     parser.add_argument("--num_samples", help="Number of Training Samples", type=int, default=100000)
     parser.add_argument("--generate_data", help="Generate belief samples", action="store_true")
     parser.add_argument("--data_folder", help="Folder name for data", type=str, default="data/p0/")
-    parser.add_argument("--result_folder", help="Folder name for data", type=str, default="cluster/p0_deterministic/")
+    parser.add_argument("--result_folder", help="Folder name for data", type=str, default="cluster/LCB/")
     args = parser.parse_args()
 
     np.random.seed(args.seed)
@@ -382,13 +400,14 @@ if __name__ == '__main__':
         B, r, kmeans = cluster_belief(bt, bp, reward_b, action_indices, nz, nu)
         result_folder = args.result_folder + "reward_expectation/"
     else:
-        B, r, kmeans = cluster_belief(bt, b_next, reward, action_indices, nz, nu)
+        B, r, kmeans, u = cluster_belief(bt, b_next, reward, action_indices, nz, nu, lmbda=args.lmbda)
+    result_folder += "{}/".format(args.lmda)
     # B, r, kmeans = cluster_state(st, s_next, reward, action_indices, nz, nu)
-    policy, V = value_iteration(B, r, nz, nu)
+    policy, V = value_iteration(B, r-u, nz, nu)
     # plot_reward_value(kmeans, r, V, nu)
     end_time = time.time()
     aR = []
-    for i in range(30):
+    for i in range(10):
         aR.append(eval_performance(policy, V, POMDP, P["start"], nu))
     dt = end_time - start_time
     lB, lr = calculate_loss(bt, bp, reward, action_indices, nz, nu, B, r, kmeans)
