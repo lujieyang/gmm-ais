@@ -311,15 +311,16 @@ def save_data(bt, b_next, bp, st, s_next, action_indices, reward, reward_b, fold
     np.save(folder_name + "reward_b", reward_b)
 
 
-def load_data(folder_name="data/sample_belief/"):
-    bt = np.load(folder_name + "bt.npy")
-    b_next = np.load(folder_name + "b_next.npy")
-    bp = np.load(folder_name + "bp.npy")
-    st = np.load(folder_name + "st.npy")
-    s_next = np.load(folder_name + "s_next.npy")
-    action_indices = np.load(folder_name + "action_indices.npy")
-    reward = np.load(folder_name + "reward.npy")
-    reward_b = np.load(folder_name + "reward_b.npy")
+def load_data(folder_name, N=1000):
+    ind = np.random.choice(96666, N, replace=False)
+    bt = np.load(folder_name + "bt.npy")[ind]
+    b_next = np.load(folder_name + "b_next.npy")[ind]
+    bp = np.load(folder_name + "bp.npy")[ind]
+    st = np.load(folder_name + "st.npy")[ind]
+    s_next = np.load(folder_name + "s_next.npy")[ind]
+    action_indices = np.load(folder_name + "action_indices.npy")[ind]
+    reward = np.load(folder_name + "reward.npy")[ind]
+    reward_b = np.load(folder_name + "reward_b.npy")[ind]
     return bt, b_next, bp, st, s_next, action_indices, reward, reward_b
 
 
@@ -367,6 +368,7 @@ if __name__ == '__main__':
                         default=1000)
     parser.add_argument("--seed", help="Random seed", type=int, default=67)
     parser.add_argument("--num_samples", help="Number of Training Samples", type=int, default=100000)
+    parser.add_argument("--offline_data_num", help="Number of Training Samples for offline training", type=int, default=5000)
     parser.add_argument("--generate_data", help="Generate belief samples", action="store_true")
     parser.add_argument("--data_folder", help="Folder name for data", type=str, default="data/p0/")
     parser.add_argument("--result_folder", help="Folder name for data", type=str, default="cluster/LCB/")
@@ -393,7 +395,7 @@ if __name__ == '__main__':
             process_belief(BO, BS, num_samples, step_ind, args.nb, s, a, r, rb)
         save_data(bt, b_next, bp, st, s_next, action_indices, reward, reward_b, folder_name=args.data_folder)
     else:
-        bt, b_next, bp, st, s_next, action_indices, reward, reward_b = load_data(folder_name=args.data_folder)
+        bt, b_next, bp, st, s_next, action_indices, reward, reward_b = load_data(args.data_folder, N=args.offline_data_num)
 
     start_time = time.time()
     if args.reward_expectation:
@@ -401,7 +403,7 @@ if __name__ == '__main__':
         result_folder = args.result_folder + "reward_expectation/"
     else:
         B, r, kmeans, u = cluster_belief(bt, b_next, reward, action_indices, nz, nu, lmbda=args.lmbda)
-    result_folder += "{}/".format(args.lmbda)
+    result_folder += "data_{}/{}/".format(args.offline_data_num, args.lmbda)
     policy, V = value_iteration(B, r-u, nz, nu)
     end_time = time.time()
     aR = []
