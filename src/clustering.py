@@ -80,7 +80,7 @@ def cluster_state(st, s_next, reward, action_indices, nz, nu):
     return np.array(B), np.array(r), kmeans
 
 
-def cluster_belief(bt, bp, reward, action_indices, nz, nu, lmbda=0.8):
+def cluster_belief(bt, bp, reward, action_indices, nz, nu, lmbda=0.95):
     # Normalize reward data
     reward = minmax_scale(reward,feature_range=(0, 1), axis=0, copy=True)
     X = bt
@@ -362,7 +362,7 @@ if __name__ == '__main__':
     parser.add_argument("--reward_expectation", help="Regression on ", action="store_true")
     parser.add_argument("--nz", help="Number of discrete AIS", type=int,
                         default=100)
-    parser.add_argument("--lmda", help="Weighting factor between", type=float, default=0.9)
+    parser.add_argument("--lmbda", help="Weighting factor between", type=float, default=0.9)
     parser.add_argument("--nb", help="Number of sample points to approximate belief distribution", type=int,
                         default=1000)
     parser.add_argument("--seed", help="Random seed", type=int, default=67)
@@ -397,14 +397,12 @@ if __name__ == '__main__':
 
     start_time = time.time()
     if args.reward_expectation:
-        B, r, kmeans = cluster_belief(bt, bp, reward_b, action_indices, nz, nu)
+        B, r, kmeans, u = cluster_belief(bt, bp, reward_b, action_indices, nz, nu)
         result_folder = args.result_folder + "reward_expectation/"
     else:
         B, r, kmeans, u = cluster_belief(bt, b_next, reward, action_indices, nz, nu, lmbda=args.lmbda)
-    result_folder += "{}/".format(args.lmda)
-    # B, r, kmeans = cluster_state(st, s_next, reward, action_indices, nz, nu)
+    result_folder += "{}/".format(args.lmbda)
     policy, V = value_iteration(B, r-u, nz, nu)
-    # plot_reward_value(kmeans, r, V, nu)
     end_time = time.time()
     aR = []
     for i in range(10):
