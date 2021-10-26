@@ -386,7 +386,11 @@ if __name__ == '__main__':
         B, r, kmeans, lB, lr = cluster_belief(bt, bp, reward_b, action_indices, nz, nu)
         result_folder = args.result_folder + "reward_expectation/"
     else:
+<<<<<<< HEAD
         B, r, kmeans, lB, lr = cluster_belief(bt, b_next, reward, action_indices, nz, nu)
+=======
+        B, r, kmeans = cluster_belief(bt, b_next, reward, action_indices, nz, nu)
+>>>>>>> 528967e939c48656b9e09bd827732877d3477c3a
     # B, r, kmeans = cluster_state(st, s_next, reward, action_indices, nz, nu)
     policy, V = value_iteration(B, r, nz, nu)
     # plot_reward_value(kmeans, r, V, nu)
