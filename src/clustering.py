@@ -351,7 +351,7 @@ if __name__ == '__main__':
     parser.add_argument("--num_samples", help="Number of Training Samples", type=int, default=100000)
     parser.add_argument("--generate_data", help="Generate belief samples", action="store_true")
     parser.add_argument("--data_folder", help="Folder name for data", type=str, default="data/p0/")
-    parser.add_argument("--result_folder", help="Folder name for data", type=str, default="cluster/p0/")
+    parser.add_argument("--result_folder", help="Folder name for data", type=str, default="cluster/p0_deterministic/")
     args = parser.parse_args()
 
     np.random.seed(args.seed)
@@ -382,7 +382,7 @@ if __name__ == '__main__':
         B, r, kmeans = cluster_belief(bt, bp, reward_b, action_indices, nz, nu)
         result_folder = args.result_folder + "reward_expectation/"
     else:
-        B, r, kmeans = cluster_belief(bt, bp, reward, action_indices, nz, nu)
+        B, r, kmeans = cluster_belief(bt, b_next, reward, action_indices, nz, nu)
     # B, r, kmeans = cluster_state(st, s_next, reward, action_indices, nz, nu)
     policy, V = value_iteration(B, r, nz, nu)
     # plot_reward_value(kmeans, r, V, nu)
