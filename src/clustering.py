@@ -363,7 +363,7 @@ if __name__ == '__main__':
     parser.add_argument("--reward_expectation", help="Regression on ", action="store_true")
     parser.add_argument("--nz", help="Number of discrete AIS", type=int,
                         default=100)
-    parser.add_argument("--lmbda", help="Weighting factor between", type=float, default=0.9)
+    parser.add_argument("--lmbda", help="Weighting factor between", type=float, default=0.98)
     parser.add_argument("--nb", help="Number of sample points to approximate belief distribution", type=int,
                         default=1000)
     parser.add_argument("--seed", help="Random seed", type=int, default=67)
@@ -404,7 +404,7 @@ if __name__ == '__main__':
     else:
         B, r, kmeans, u = cluster_belief(bt, b_next, reward, action_indices, nz, nu, lmbda=args.lmbda)
     result_folder += "data_{}/{}/".format(args.offline_data_num, args.lmbda)
-    policy, V = value_iteration(B, r-u, nz, nu)
+    policy, V = value_iteration(B, r-0.5*u, nz, nu)
     end_time = time.time()
     aR = []
     for i in range(10):

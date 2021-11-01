@@ -31,14 +31,14 @@ if __name__ == '__main__':
     parser.add_argument("--load_data", help="Load belief samples", action="store_true")
     parser.add_argument("--calculate_loss", action="store_true")
     parser.add_argument("--data_folder", help="Folder name for data", type=str, default="data/p0/")
-    parser.add_argument("--folder_name", type=str, default="cluster/p0/")
+    parser.add_argument("--folder_name", type=str, default="cluster/p0_deterministic/data_10000/")
     args = parser.parse_args()
 
     # nz_list = [50, 75, 100, 200, 250, 300, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000, 1250, 1500]
-    nz_list = range(50, 91)
+    nz_list = range(30, 101, 5)
     nb = 1000
     nu = 3
-    seeds = [67, 88, 42, 157, 33, 77, 1024, 2048, 512] #, 32]
+    seeds = [67] #, 88, 42, 157, 33, 77, 1024, 2048, 512] #, 32]
 
     if args.load_data:
         bt, b_next, bp, st, s_next, action_indices, reward, reward_b = load_data(folder_name=args.data_folder)
@@ -83,6 +83,7 @@ if __name__ == '__main__':
     # plt.title("Performance vs DAIS Dimension")
     plt.savefig("cn_return")
     plt.show()
+    plt.close()
 
     loss_B = np.array(loss_B)
     loss_r = np.array(loss_r)
