@@ -1,0 +1,1 @@
+from gym_corridor.envs.corridor_env import CorridorEnv

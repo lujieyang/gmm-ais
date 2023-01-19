@@ -97,8 +97,8 @@ class GMixture:
             for x in gm2.g:
                 ig = Gaussian(x.m, S1+x.S)
                 val.append(ig.Value(m1))
-                c += self.w[i] * np.sum(gm2.w * np.array(val))
-            return c
+            c += self.w[i] * np.sum(gm2.w * np.array(val))
+        return c
 
     def Compress(self, m):
         """
